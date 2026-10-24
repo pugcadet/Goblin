@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Goblin",
+  "version": "1.0.0",
+  "identifier": "app.goblin.downloader",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Goblin",
+        "width": 1040,
+        "height": 760,
+        "minWidth": 720,
+        "minHeight": 520
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: https://i.ytimg.com https://*.ytimg.com https://*.googleusercontent.com https://*.ggpht.com; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "category": "Video",
+    "shortDescription": "Simple, local video and music downloader",
+    "externalBin": [
+      "binaries/ffmpeg",
+      "binaries/ffprobe",
+      "binaries/deno"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "signingIdentity": "-"
+    }
+  }
+}
