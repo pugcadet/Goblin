@@ -4,6 +4,7 @@ mod error;
 mod media_tools;
 mod naming;
 mod state;
+mod updater;
 
 use tauri::Manager;
 
@@ -26,6 +27,8 @@ pub fn run() {
             downloads::dl_start,
             downloads::dl_cancel,
             downloads::dl_reveal,
+            updater::check_update,
+            updater::install_update,
         ])
         .build(tauri::generate_context!())
         .expect("error while starting Goblin");

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api, errorText, fileManager, isMac, ToolState } from "./api";
 import { getParallel, setParallel } from "./queue";
+import { UpdateSettings } from "./Updates";
 
 const BROWSERS: [string, string][] = [
   ["", "Off"],
@@ -73,7 +74,7 @@ export default function Settings({ tool, onChanged, onUpdate, updating }: {
       </section>
 
       <section className="card form">
-        <h2>Tools</h2>
+        <h2>Download tools</h2>
         <div className="setting">
           <div>
             <div>yt-dlp {ok(tool?.version)}</div>
@@ -90,7 +91,9 @@ export default function Settings({ tool, onChanged, onUpdate, updating }: {
         </div>
       </section>
 
-      <p className="muted small">Goblin 1.0 · everything runs on this computer: no account, no server, nothing in the background after you quit.</p>
+      <UpdateSettings />
+
+      <p className="muted small">Everything runs on this computer: no account, no server, nothing in the background after you quit.</p>
     </main>
   );
 }

@@ -14,14 +14,14 @@ Both apps use the same download engine (`src-tauri/src/downloads.rs`), so a fix 
 | **Download** | Paste one or more links (one per line, ⌘/Ctrl+Enter). **Video**: up to 4K/1440p/1080p/720p/480p, MP4 or MKV, optional subtitles (embedded), chapters and thumbnail inside the file. **Music**: M4A, MP3, Opus or FLAC with title/artist/album tags and a square cover. Whole playlists and albums, cut sponsor segments, file names as *Title [id]* / *Artist - Title* or a folder per channel/artist. |
 | **Queue** | A few downloads at once (you choose how many), the rest wait. Live progress, speed, time left, "item 3/12" for playlists. Cancel, retry, show the file in Finder/Explorer. |
 | **Search** | Search YouTube Music songs or YouTube videos and download as music or video with one click. |
-| **Settings** | Download folder, downloads at once, optional YouTube sign-in cookies from your browser, yt-dlp version and update. |
+| **Settings** | Download folder, downloads at once, optional YouTube sign-in cookies from your browser, yt-dlp version and update, Goblin updates. |
 
 Organizing and renaming for Jellyfin is left to FileBot (or Media Hub's Renamer); Goblin just downloads, cleanly named.
 
 ## Install
 
-1. Open the **Releases** page of this repository and download the newest file for your computer
-   (`.dmg` for Mac, `-setup.exe` for Windows).
+1. Open the **Releases** page of this repository and download the newest version for your computer:
+   `Goblin-macos.dmg` (Mac) or `Goblin-windows-setup.exe` (Windows).
 2. The app is not signed with a paid developer certificate, so the first start needs one extra click:
    - **Mac:** drag Goblin to Applications and open it. If macOS blocks it, open System Settings → Privacy & Security and click **Open Anyway**.
      If macOS says the app is damaged, run once in Terminal:
@@ -32,6 +32,13 @@ Organizing and renaming for Jellyfin is left to FileBot (or Media Hub's Renamer)
 
 ffmpeg and deno come **inside** the app; there is nothing else to install. Macs with Apple silicon (M1 and newer)
 and 64-bit Windows 10/11 are supported.
+
+## Updates
+
+Goblin updates itself, the same way Media Hub does: a few seconds after start it asks GitHub for the newest release
+and offers it (Settings → Goblin updates checks by hand). The download is checked against the `SHA256SUMS` file
+published next to it; on a Mac the app replaces itself and restarts, on Windows the installer runs and Goblin closes.
+This needs the repository to be **public** (GitHub only answers anonymous update checks for public repositories).
 
 ## Reliable by design
 
@@ -62,8 +69,10 @@ and 64-bit Windows 10/11 are supported.
 
 ## Building it yourself
 
-Every push to `main` builds and tests on Mac and Windows (GitHub Actions) and publishes the installers on the
-Releases page. Build logs are kept on the `ci-logs` branch.
+Every push to `main` builds and tests on Mac and Windows (GitHub Actions) and publishes one release per version
+(`v1.1.0`, …, taken from `src-tauri/tauri.conf.json`) with `Goblin-macos.dmg`, `Goblin-macos.app.tar.gz`,
+`Goblin-windows-setup.exe` and their `SHA256SUMS` files. Bump the version in `tauri.conf.json`, `Cargo.toml` and
+`package.json` to publish a new one. Build logs are kept on the `ci-logs` branch.
 
 On your own computer you need Node 22 and Rust:
 
@@ -79,8 +88,9 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 - `src-tauri/src/downloads.rs` – the download engine, **shared with Media Hub** (keep both copies identical).
   Pure parts are unit tested: the yt-dlp command line, progress parsing, search results, checksums, error text.
+- `src-tauri/src/updater.rs` – in-app updates; the same as Media Hub's `updater.rs` except the constants at the top.
 - `src-tauri/src/` – the rest of the small Rust core: settings (`config.rs`, `state.rs`), file-name rules (`naming.rs`).
 - `src/` – the window (React + TypeScript). `queue.ts` is the download queue, `prefs.ts` the remembered choices.
-  `styles.css` is Media Hub's stylesheet plus a short Goblin section at the end.
+  `styles.css` follows Media Hub's look (same colours, fonts and controls) with Goblin's green accent.
 - `scripts/fetch-sidecars.sh` – downloads and verifies ffmpeg, ffprobe and deno for the build.
 - `.github/workflows/build.yml` – builds, tests and publishes the Mac and Windows installers.

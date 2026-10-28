@@ -6,6 +6,7 @@ import { askConfirm } from "./confirm";
 import Download from "./Download";
 import Search from "./Search";
 import Settings from "./Settings";
+import { UpdateToast } from "./Updates";
 
 type View = "download" | "search" | "settings";
 const TABS: [View, string][] = [["download", "Download"], ["search", "Search"], ["settings", "Settings"]];
@@ -116,6 +117,7 @@ export default function App() {
       {view === "download" && <Download tool={tool} />}
       {view === "search" && <Search tool={tool} onQueued={() => undefined} />}
       {view === "settings" && <Settings tool={tool} onChanged={() => void refresh()} onUpdate={() => void install(false)} updating={updating} />}
+      <UpdateToast />
     </div>
   );
 }

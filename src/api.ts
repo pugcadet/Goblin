@@ -51,7 +51,16 @@ export const api = {
   start: (req: DlRequest) => invoke<number>("dl_start", { req }),
   cancel: (id: number) => invoke<void>("dl_cancel", { id }),
   reveal: (path: string | null) => invoke<void>("dl_reveal", { path }),
+  checkUpdate: () => invoke<UpdateInfo>("check_update"),
+  installUpdate: () => invoke<void>("install_update"),
 };
+
+export interface UpdateInfo {
+  current: string;
+  latest: string | null;
+  available: boolean;
+  notes: string;
+}
 
 /** Tauri reports errors from Rust as plain strings. */
 export function errorText(e: unknown): string {
