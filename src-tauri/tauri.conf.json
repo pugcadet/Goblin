@@ -43,5 +43,14 @@
     "macOS": {
       "signingIdentity": "-"
     }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "goblin"
+        ]
+      }
+    }
   }
 }

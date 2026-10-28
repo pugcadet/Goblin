@@ -13,6 +13,10 @@ pub struct Settings {
     pub ffmpeg_path: Option<String>,
     /// Browser to borrow YouTube sign-in cookies from ("firefox", ...). Empty = none.
     pub cookies_browser: Option<String>,
+    /// Name of the cookies.txt you loaded (Goblin keeps its own copy as cookies.txt).
+    pub cookies_name: Option<String>,
+    /// Folders and files you picked in a dialog: Goblin may work in them (presets' folders, Fix music).
+    pub granted: Vec<String>,
 }
 
 fn path(dir: &Path) -> PathBuf {

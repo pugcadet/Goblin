@@ -56,6 +56,7 @@ jobs:
       # One release per version (v1.1.0, ...), like Media Hub. The .app.tar.gz and the Windows
       # installer are what Goblin's in-app updater downloads, checked against the SHA256SUMS files.
       - name: Publish release
+        if: github.ref == 'refs/heads/main'
         run: |
           set -e
           version=$(node -p "require('./src-tauri/tauri.conf.json').version")
