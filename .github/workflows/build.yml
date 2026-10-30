@@ -51,6 +51,13 @@ jobs:
       - name: Type-check the window
         run: npx tsc --noEmit 2>&1 | tee -a ci.log
 
+      # Tests run for this machine's own chip; when building for another chip, its helper programs only need to exist.
+      - name: Placeholders for the test run
+        if: matrix.target
+        run: |
+          host=$(rustc -vV | sed -n 's/^host: //p')
+          for t in ffmpeg ffprobe deno; do [ -e "src-tauri/binaries/$t-$host" ] || : > "src-tauri/binaries/$t-$host"; done
+
       - name: Run Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml 2>&1 | tee -a ci.log
 
