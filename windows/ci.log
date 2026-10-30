@@ -1,5 +1,5 @@
 
-added 73 packages in 8s
+added 73 packages in 7s
 → deno (x86_64-pc-windows-msvc)
   ↓ https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip
   ↓ https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip.sha256sum
@@ -64,9 +64,9 @@ added 73 packages in 8s
 [1m[92m      Adding[0m zvariant v5.15.1
 [1m[92m      Adding[0m zvariant_derive v5.15.1
 [1m[92m      Adding[0m zvariant_utils v4.2.0
-[1m[92m   Compiling[0m goblin v1.2.1 (D:\a\Goblin\Goblin\src-tauri)
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 1m 25s
-[1m[92m     Running[0m unittests src\lib.rs (src-tauri\target\debug\deps\goblin_lib-716a1b394415a160.exe)
+[1m[92m   Compiling[0m goblin v1.3.0 (D:\a\Goblin\Goblin\src-tauri)
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 1m 19s
+[1m[92m     Running[0m unittests src\lib.rs (src-tauri\target\debug\deps\goblin_lib-1c7c4819866bdaaa.exe)
 
 running 23 tests
 test config::tests::unknown_or_missing_fields_are_fine ... ok
@@ -75,8 +75,8 @@ test downloads::tests::builds_safe_arguments ... ok
 test downloads::tests::helper_programs_and_cookies ... ok
 test config::tests::saves_and_loads ... ok
 test downloads::tests::plain_error_text ... ok
-test downloads::tests::reads_progress_and_checksums ... ok
 test downloads::tests::rejects_non_web_addresses ... ok
+test downloads::tests::reads_progress_and_checksums ... ok
 test downloads::tests::search_targets_and_results ... ok
 test downloads::tests::series_naming_makes_jellyfin_style_names ... ok
 test downloads::tests::summarizes_playlists ... ok
@@ -95,7 +95,7 @@ test updater::tests::swap_keeps_old_when_new_is_missing ... ok
 
 test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-[1m[92m     Running[0m unittests src\main.rs (src-tauri\target\debug\deps\goblin-f796df0343a26c9d.exe)
+[1m[92m     Running[0m unittests src\main.rs (src-tauri\target\debug\deps\goblin-37b9eb7d274f8fce.exe)
 
 running 0 tests
 
@@ -110,7 +110,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
         Info Looking up installed tauri packages to check mismatched versions...
      Running beforeBuildCommand `npm run build`
 
-> goblin@1.2.1 build
+> goblin@1.3.0 build
 > tsc && vite build
 
 [36mvite v5.4.21 [32mbuilding for production...[36m[39m
@@ -141,11 +141,11 @@ computing gzip size...
 [2mdist/[22m[32massets/jetbrains-mono-latin-400-normal-6-qcROiO.woff       [39m[1m[2m 27.50 kB[22m[1m[22m
 [2mdist/[22m[32massets/inter-latin-wght-normal-Dx4kXJAl.woff2              [39m[1m[2m 48.26 kB[22m[1m[22m
 [2mdist/[22m[32massets/inter-latin-ext-wght-normal-DO1Apj_S.woff2          [39m[1m[2m 85.07 kB[22m[1m[22m
-[2mdist/[22m[35massets/index-B4VJCCr_.css                                  [39m[1m[2m 31.36 kB[22m[1m[22m[2m │ gzip:  12.72 kB[22m
-[2mdist/[22m[36massets/index-D-ffmnBf.js                                   [39m[1m[2m350.21 kB[22m[1m[22m[2m │ gzip: 111.65 kB[22m
-[32m✓ built in 2.60s[39m
-[1m[92m   Compiling[0m goblin v1.2.1 (D:\a\Goblin\Goblin\src-tauri)
-[1m[92m    Finished[0m `release` profile [optimized] target(s) in 3m 54s
+[2mdist/[22m[35massets/index-B-OCKrUi.css                                  [39m[1m[2m 31.85 kB[22m[1m[22m[2m │ gzip:  12.86 kB[22m
+[2mdist/[22m[36massets/index-YhUmuDmU.js                                   [39m[1m[2m355.59 kB[22m[1m[22m[2m │ gzip: 113.24 kB[22m
+[32m✓ built in 2.50s[39m
+[1m[92m   Compiling[0m goblin v1.3.0 (D:\a\Goblin\Goblin\src-tauri)
+[1m[92m    Finished[0m `release` profile [optimized] target(s) in 3m 36s
        Built application at: D:\a\Goblin\Goblin\src-tauri\target\release\goblin.exe
         Info Patching D:\a\Goblin\Goblin\src-tauri\target\release\goblin.exe with bundle type information: nsis
         Info Verifying NSIS package
@@ -155,8 +155,8 @@ computing gzip size...
  Downloading https://github.com/tauri-apps/nsis-tauri-utils/releases/download/nsis_tauri_utils-v0.5.3/nsis_tauri_utils.dll
         Info validating hash
         Info Target: x64
-     Running makensis to produce D:\a\Goblin\Goblin\src-tauri\target\release\bundle\nsis\Goblin_1.2.1_x64-setup.exe
+     Running makensis to produce D:\a\Goblin\Goblin\src-tauri\target\release\bundle\nsis\Goblin_1.3.0_x64-setup.exe
     Finished 1 bundle at:
-        D:\a\Goblin\Goblin\src-tauri\target\release\bundle\nsis\Goblin_1.2.1_x64-setup.exe (125.47 MiB)
+        D:\a\Goblin\Goblin\src-tauri\target\release\bundle\nsis\Goblin_1.3.0_x64-setup.exe (125.45 MiB)
 
-https://github.com/pugcadet/Goblin/releases/tag/v1.2.1
+https://github.com/pugcadet/Goblin/releases/tag/v1.3.0
