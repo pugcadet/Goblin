@@ -66,6 +66,7 @@ pub fn run() {
             host::fs_exists,
             host::fs_read_text,
             host::fs_write_text,
+            host::image_data,
             host::fs_size,
             host::fs_move,
             host::fs_mkdirs,

@@ -89,7 +89,7 @@ class Subs {
     return out;
   }
 
-  async update(id: string, patch: Partial<Subscription> & { rules?: Partial<SubRules> }) {
+  async update(id: string, patch: Partial<Omit<Subscription, "rules">> & { rules?: Partial<SubRules> }) {
     const i = this.list.findIndex((s) => s.id === id);
     if (i < 0) return;
     const s = { ...this.list[i] };

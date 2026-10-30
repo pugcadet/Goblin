@@ -2,15 +2,19 @@
 import { useEffect, useState } from "react";
 import { api, errorText, isMac, UpdateInfo } from "./api";
 import { askConfirm } from "./confirm";
-import { activeCount } from "./queue";
+import { jobs } from "./engine/jobs";
 
 async function install(info: UpdateInfo): Promise<void> {
-  const busy = activeCount() > 0 ? " Downloads that are still busy stop; adding the same link again later continues them." : "";
+  const busy = jobs.activeCount() > 0 ? " Downloads that are still busy stop; Retry continues them later." : "";
   const ok = await askConfirm(
     `Update Goblin from ${info.current} to ${info.latest}? ${isMac ? "Goblin downloads the new version, checks it, replaces itself and restarts." : "Goblin downloads the installer, checks it and starts it; Goblin closes while it installs."}${busy}`,
     { okLabel: "Update now" },
   );
-  if (ok) await api.installUpdate();
+  if (ok) {
+    jobs.cancelAll();
+    await jobs.saveNow();
+    await api.installUpdate();
+  }
 }
 
 /** Settings block: this version, the newest one, and a manual check. */

@@ -1,3 +1,4 @@
+// Rust commands the window uses directly (the engine's own ones are in engine/tauri.ts).
 import { invoke } from "@tauri-apps/api/core";
 
 export interface ToolState {
@@ -10,51 +11,6 @@ export interface ToolState {
   cookies: string | null;
 }
 
-export interface DlRequest {
-  url: string;
-  kind: "video" | "audio";
-  maxHeight: number;
-  format: string;
-  subtitles: boolean;
-  subLangs: string[];
-  sponsorblock: boolean;
-  playlist: boolean;
-  naming: "title" | "channel" | "series";
-  seriesName: string | null;
-  season: number | null;
-}
-
-export interface Hit {
-  url: string;
-  title: string;
-  channel: string;
-  duration: number | null;
-  thumbnail: string | null;
-}
-
-export interface DlEvent {
-  id: number;
-  kind: "progress" | "status" | "title" | "file" | "done" | "failed" | "cancelled";
-  percent: number | null;
-  speed: string | null;
-  eta: string | null;
-  item: string | null;
-  text: string | null;
-}
-
-export const api = {
-  ytdlpInfo: () => invoke<ToolState>("ytdlp_info"),
-  ytdlpInstall: () => invoke<string>("ytdlp_install"),
-  pickDownloadFolder: () => invoke<string | null>("pick_download_folder"),
-  setCookies: (browser: string | null) => invoke<void>("dl_set_cookies", { browser }),
-  search: (query: string, kind: "songs" | "videos") => invoke<Hit[]>("dl_search", { query, kind }),
-  start: (req: DlRequest) => invoke<number>("dl_start", { req }),
-  cancel: (id: number) => invoke<void>("dl_cancel", { id }),
-  reveal: (path: string | null) => invoke<void>("dl_reveal", { path }),
-  checkUpdate: () => invoke<UpdateInfo>("check_update"),
-  installUpdate: () => invoke<void>("install_update"),
-};
-
 export interface UpdateInfo {
   current: string;
   latest: string | null;
@@ -62,24 +18,36 @@ export interface UpdateInfo {
   notes: string;
 }
 
+export interface CookieState {
+  loaded: boolean;
+  name: string;
+}
+
+export const api = {
+  ytdlpInfo: () => invoke<ToolState>("ytdlp_info"),
+  ytdlpInstall: () => invoke<string>("ytdlp_install"),
+  pickLibrary: () => invoke<string | null>("pick_download_folder"),
+  setCookieBrowser: (browser: string | null) => invoke<void>("dl_set_cookies", { browser }),
+  pickPaths: (kind: "folder" | "folders" | "audio") => invoke<string[]>("pick_paths", { kind }),
+  pickImage: () => invoke<string | null>("pick_image"),
+  cookiesInfo: () => invoke<CookieState>("cookies_info"),
+  cookiesLoad: () => invoke<CookieState>("cookies_load"),
+  cookiesDelete: () => invoke<CookieState>("cookies_delete"),
+  linksTake: () => invoke<string[]>("links_take"),
+  imageData: (path: string) => invoke<string | null>("image_data", { path }),
+  checkUpdate: () => invoke<UpdateInfo>("check_update"),
+  installUpdate: () => invoke<void>("install_update"),
+};
+
 /** Tauri reports errors from Rust as plain strings. */
 export function errorText(e: unknown): string {
   return typeof e === "string" ? e : e instanceof Error ? e.message : "Something went wrong.";
 }
 
-export function duration(sec: number | null | undefined): string {
-  if (!sec || sec < 0) return "";
-  const s = Math.round(sec);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const r = String(s % 60).padStart(2, "0");
-  return h ? `${h}:${String(m).padStart(2, "0")}:${r}` : `${m}:${r}`;
-}
-
 export const isMac = navigator.userAgent.includes("Mac");
 export const fileManager = isMac ? "Finder" : "Explorer";
 
-/** Small saved conveniences (download choices, number of downloads at once). */
+/** Small per-window conveniences (remembered search filters, open sections). */
 export function loadLocal<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);

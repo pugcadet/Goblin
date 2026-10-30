@@ -1,80 +1,73 @@
 # Goblin
 
-A simple, local video and music downloader for **Mac and Windows**, built on [yt-dlp](https://github.com/yt-dlp/yt-dlp).
-Paste links (or search), pick Video or Music, done. Everything runs on your own computer: no account, no server,
-no Docker, and nothing keeps running after you quit.
+A video and music downloader for **Mac and Windows**, built on [yt-dlp](https://github.com/yt-dlp/yt-dlp), with a
+MeTube-style window and everything the original Mac-only Goblin did for videos and music. Everything runs on your own
+computer: no account, no server, no Docker, and nothing keeps running after you quit.
 
-This is the standalone version of the downloader inside [Media Hub](https://github.com/pugcadet/media-hub).
-Both apps use the same download engine (`src-tauri/src/downloads.rs`), so a fix in one is a copy-paste away from the other.
+It shares its download module with [Media Hub](https://github.com/pugcadet/media-hub) (`src-tauri/src/downloads.rs`)
+and its look and update system (`updater.rs`, `Updates.tsx`).
 
 ## What it does
 
 | Screen | |
 | --- | --- |
-| **Download** | Paste one or more links (one per line, ⌘/Ctrl+Enter). **Video**: up to 4K/1440p/1080p/720p/480p, MP4 or MKV, optional subtitles (embedded), chapters and thumbnail inside the file. **Music**: M4A, MP3, Opus or FLAC with title/artist/album tags and a square cover. Whole playlists and albums, cut sponsor segments, file names as *Title [id]* / *Artist - Title* or a folder per channel/artist. |
-| **Queue** | A few downloads at once (you choose how many), the rest wait. Live progress, speed, time left, "item 3/12" for playlists. Cancel, retry, show the file in Finder/Explorer. |
-| **Search** | Search YouTube Music songs or YouTube videos and download as music or video with one click. |
-| **Settings** | Download folder, downloads at once, optional YouTube sign-in cookies from your browser, yt-dlp version and update, Goblin updates. |
+| **Downloads** | Paste links one per line (⌘/Ctrl+Enter) or type “Artist - Song”. Pick a preset, or change quality, format, codec, audio format and “Tags + cover” for this download only. **Advanced**: own folder, name prefix, SponsorBlock, split by chapters, clip (start → end), start right away or keep pending, playlist limit, subscription check/filter, members-only, video password, extra yt-dlp options, cookies.txt, import / copy URLs. **Auto-detect** looks at what you paste and suggests (or applies) the right preset, or offers *Subscribe instead*. **Preview** shows qualities, size, subtitles, chapters and whether audio is the official track. |
+| **Queue** | A few downloads at once, the rest wait. Live stage, progress, speed, time left, size. Low-confidence music matches pause and show options (pick one, search, or keep the title). Logs per download. Completed list with Done / Failed filters, albums and playlists grouped, select-all and bulk retry / remove / delete files, Show in Finder/Explorer. History is kept between starts. |
+| **Search** | **Music**: YouTube Music's own song search (its order and covers), with plays, filters (hide covers/karaoke/tributes, minimum plays, most played, per artist) and *Load more*. **Albums**: the albums behind the top songs plus YouTube Music's album search, deluxe / singles filters, tick several to download at once, **Artist discography** (Deezer). **Videos**: YouTube, download or subscribe, bulk select. **Podcasts**: Apple Podcasts directory, subscribe to the feed. |
+| **Album finder** | Open any album: its tracklist, untick tracks, choose the cover (YouTube Music, Apple Music, Deezer, Cover Art Archive, your own picture or a link), MusicBrainz editions, every track checked against YouTube Music (✓ / ⚠ / pick another upload), then download with all tags decided. |
+| **Music tagging** | MusicBrainz tags (album, album artist, track/disc numbers, date, genre, label, ISRC, MusicBrainz IDs), Cover Art Archive covers (square, up to 1200 px), synced lyrics from LRCLIB embedded in the file, ReplayGain or loudness normalization, clean-up of “(Official Audio)” and friends, featured artists in the title or the artist, ID3v2.3/2.4. One ffmpeg pass per file. Typed “Artist - Song” finds the official studio track. Podcast mode files episodes by show and date. |
+| **Subscriptions** | Channels, playlists and podcast feeds, checked while Goblin is open. **Rules**: skip Shorts or live streams, members-only, minimum/maximum length, recent only, title must match / include / not include, a maximum per check, and keep only the newest N. |
+| **Fix music** | Choose old files or folders: Goblin matches each on MusicBrainz and fixes tags, cover, ReplayGain, lyrics and names, as a copy in your library or in place. *Other match…*, *Set album for selected…* (lines your files up with an album's tracks), and **Find missing tracks** (compares the albums in a music folder with YouTube Music and lists what you don't have). |
+| **Presets** | Your own presets for video and music: every option above, a default, duplicate, reset. |
+| **Settings** | Library folder and sub-folders, name and folder patterns with click-to-add fields and a live example, yt-dlp templates, downloads at once, connections, auto-start, playlist limit, remember downloaded videos, auto-clear, music defaults, subscriptions, yt-dlp version and updates, global options, speed limit, YouTube sign-in, bookmarklet, look, Goblin updates. |
 
-Organizing and renaming for Jellyfin is left to FileBot (or Media Hub's Renamer); Goblin just downloads, cleanly named.
+**Bookmarklet**: Settings → Look. It sends the page you're on to Goblin through `goblin://add?url=…` (no server).
+
+Shows (TMDB / your own series), web pages and the menu bar of the Mac-only Goblin are left out on purpose: FileBot
+or Media Hub do the TV naming.
+
+## Where files go
+
+Everything lands in one **library** folder (default `Downloads/Goblin`), ready to copy to your NAS:
+
+```
+YouTube/Veritasium/The Surprising Genius of Sewing Machines.mp4     (patterns in Settings)
+Music/Daft Punk/Random Access Memories (2013)/Get Lucky.mp3          (cover and lyrics inside the file)
+Podcasts/Hardcore History/2025-09-01 - Episode.mp3
+Other/Original title [id].mkv                                       ("Keep original title" presets)
+```
 
 ## Install
 
-1. Open the **Releases** page of this repository and download the newest version for your computer:
-   `Goblin-macos.dmg` (Mac) or `Goblin-windows-setup.exe` (Windows).
+1. Open the **Releases** page and download the newest version: `Goblin-macos.dmg` (Mac) or `Goblin-windows-setup.exe` (Windows).
 2. The app is not signed with a paid developer certificate, so the first start needs one extra click:
    - **Mac:** drag Goblin to Applications and open it. If macOS blocks it, open System Settings → Privacy & Security and click **Open Anyway**.
-     If macOS says the app is damaged, run once in Terminal:
-     `xattr -dr com.apple.quarantine /Applications/Goblin.app`
+     If macOS says the app is damaged, run once in Terminal: `xattr -dr com.apple.quarantine /Applications/Goblin.app`
    - **Windows:** if SmartScreen appears, choose **More info**, then **Run anyway**.
-3. Start it. Goblin fetches yt-dlp on first start (checked against its published checksum) and saves to
-   `Downloads/Goblin` until you choose another folder.
+3. Start it. Goblin fetches yt-dlp on first start (checked against its published checksum).
 
-ffmpeg and deno come **inside** the app; there is nothing else to install. Macs with Apple silicon (M1 and newer)
-and 64-bit Windows 10/11 are supported.
+ffmpeg, ffprobe and deno come **inside** the app. Macs with Apple silicon and 64-bit Windows 10/11 are supported.
 
-## Updates
-
-Goblin updates itself, the same way Media Hub does: a few seconds after start it asks GitHub for the newest release
-and offers it (Settings → Goblin updates checks by hand). The download is checked against the `SHA256SUMS` file
-published next to it; on a Mac the app replaces itself and restarts, on Windows the installer runs and Goblin closes.
-This needs the repository to be **public** (GitHub only answers anonymous update checks for public repositories).
-
-## Reliable by design
-
-- **yt-dlp stays current.** YouTube changes often, so Goblin quietly updates yt-dlp every few days
-  (Settings → Tools → *Update now* does it right away). Every download of yt-dlp is checked against its SHA-256 checksum.
-- **All of YouTube's qualities.** deno (shipped inside the app) lets yt-dlp run YouTube's player code.
-- **Retries** on flaky connections, **resume** of half-finished downloads, **never overwrites** an existing file.
-- **Playlists keep going** when one video is private or removed; the row says "Finished with problems".
-- **Quit means quit.** Closing the window stops every download and everything it started (also ffmpeg).
+**Updates**: Goblin checks GitHub for a newer version a few seconds after start (Settings → Goblin updates), verifies
+it against its `SHA256SUMS` file and replaces itself. GitHub only answers this check anonymously for **public**
+repositories; while this repository is private, download new versions from the Releases page yourself.
 
 ## Safety
 
-- **No shell.** yt-dlp is started directly with a fixed set of options; your yt-dlp config files are ignored;
-  only `http(s)` links are accepted and the link always comes after `--`, so it can never act as an option.
-- **No open ports, no web server.** The window talks to the app through Tauri's built-in bridge.
-  The window itself has no file-system, shell or network access.
-- **Files stay in your download folder.** "Show in Finder/Explorer" only works for files inside it.
-- **Cookies are off by default.** When switched on (Settings → YouTube sign-in), yt-dlp reads them from your
-  browser on this computer only when it needs them; Goblin never stores or sends them anywhere else.
-
-## Where things live
-
-| What | Where |
-| --- | --- |
-| Downloads | The folder you choose (default: `Downloads/Goblin`) |
-| Settings, Goblin's copy of yt-dlp | The app's data folder: Mac `~/Library/Application Support/app.goblin.downloader`, Windows `%APPDATA%\app.goblin.downloader` |
-| ffmpeg, ffprobe, deno | Inside the app (next to the Goblin program) |
+- **No shell, no open ports.** yt-dlp, ffmpeg and ffprobe are started directly with an argument list. yt-dlp options
+  that run programs or read other files (`--exec`, `--netrc-cmd`, `--external-downloader`, `--plugin-dirs`,
+  `--config-location`, …) are refused, also in “extra options”.
+- **The window can only do a short list of things** (`src-tauri/src/host.rs`): web requests only to MusicBrainz,
+  Cover Art Archive, LRCLIB, Deezer, Apple, YouTube Music and their picture servers; files only inside your library
+  folder, Goblin's own data folder and folders you picked in a dialog; deleting only to the Trash / Recycle Bin.
+- **Cookies are off by default.** A cookies.txt (or a browser) is only used when YouTube says a video is
+  age-restricted or members-only: that one video, one at a time, 30 s apart, with a daily cap.
 
 ## Building it yourself
 
 Every push to `main` builds and tests on Mac and Windows (GitHub Actions) and publishes one release per version
-(`v1.1.0`, …, taken from `src-tauri/tauri.conf.json`) with `Goblin-macos.dmg`, `Goblin-macos.app.tar.gz`,
-`Goblin-windows-setup.exe` and their `SHA256SUMS` files. Bump the version in `tauri.conf.json`, `Cargo.toml` and
+(`v1.2.0`, …, from `src-tauri/tauri.conf.json`). Bump the version in `tauri.conf.json`, `Cargo.toml` and
 `package.json` to publish a new one. Build logs are kept on the `ci-logs` branch.
-
-On your own computer you need Node 22 and Rust:
 
 ```bash
 npm install
@@ -86,11 +79,11 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 ## Code
 
-- `src-tauri/src/downloads.rs` – the download engine, **shared with Media Hub** (keep both copies identical).
-  Pure parts are unit tested: the yt-dlp command line, progress parsing, search results, checksums, error text.
-- `src-tauri/src/updater.rs` – in-app updates; the same as Media Hub's `updater.rs` except the constants at the top.
-- `src-tauri/src/` – the rest of the small Rust core: settings (`config.rs`, `state.rs`), file-name rules (`naming.rs`).
-- `src/` – the window (React + TypeScript). `queue.ts` is the download queue, `prefs.ts` the remembered choices.
-  `styles.css` follows Media Hub's look (same colours, fonts and controls) with Goblin's green accent.
-- `scripts/fetch-sidecars.sh` – downloads and verifies ffmpeg, ffprobe and deno for the build.
-- `.github/workflows/build.yml` – builds, tests and publishes the Mac and Windows installers.
+- `src/engine/` – the downloader itself, in TypeScript: `jobs.ts` (queue and the video/music pipelines),
+  `search.ts` (search and album finder), `subs.ts`, `fix.ts` (Fix music, missing tracks, preview, auto-detect),
+  `services.ts` (MusicBrainz, LRCLIB, Deezer, Apple), `ytmusic.ts`, `tagger.ts` (ffmpeg), `ytdlp.ts`.
+  It only talks to the computer through `host.ts`.
+- `src-tauri/src/host.rs` – the checked tools the engine may use. `downloads.rs` – yt-dlp install/update (shared with Media Hub).
+  `updater.rs` – Goblin updates (same as Media Hub's).
+- `src/screens/` – the window (React). `src/styles.css` follows Media Hub's look with Goblin's green.
+- `test/e2e.ts` – runs the engine with real yt-dlp and ffmpeg on local media (see the file for how).

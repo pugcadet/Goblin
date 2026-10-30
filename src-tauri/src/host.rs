@@ -657,6 +657,23 @@ pub fn fs_read_text(state: State<'_, AppState>, path: String) -> Result<Option<S
     }
 }
 
+/// A small picture from Goblin's temporary folder (cover previews) as a data: address the window can show.
+#[tauri::command]
+pub fn image_data(state: State<'_, AppState>, path: String) -> Result<Option<String>> {
+    use base64::Engine;
+    let tmp = resolved(&tmp_root(&state)).ok_or_else(|| Error::msg("internal error"))?;
+    let Some(p) = resolved(Path::new(&path)).filter(|p| p.starts_with(&tmp)) else { return Ok(None) };
+    let mime = match p.extension().map(|e| e.to_string_lossy().to_lowercase()).as_deref() {
+        Some("png") => "image/png",
+        Some("webp") => "image/webp",
+        _ => "image/jpeg",
+    };
+    match std::fs::read(&p) {
+        Ok(b) if b.len() <= 8 * 1024 * 1024 => Ok(Some(format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(b)))),
+        _ => Ok(None),
+    }
+}
+
 /// Writes a text file into Goblin's temporary folder only (info JSON for yt-dlp).
 #[tauri::command]
 pub fn fs_write_text(state: State<'_, AppState>, path: String, text: String) -> Result<()> {
