@@ -41,8 +41,11 @@ class Job {
   get waiting() {
     return this.info.status === "queued" || this.info.status === "pending";
   }
+  /** When this job last started working, for the seconds shown in its log. */
+  t0 = 0;
   addLog(s: string) {
-    this.log.push(s);
+    if (!this.t0) this.t0 = Date.now();
+    this.log.push(`[${((Date.now() - this.t0) / 1000).toFixed(1).padStart(5)}s] ${s}`);
     if (this.log.length > 400) this.log.splice(0, this.log.length - 300);
   }
   check() {
@@ -280,6 +283,7 @@ class Manager {
       if (j.info.status !== "queued") continue;
       running++;
       j.canceled = false;
+      j.t0 = Date.now();
       this.update(j, { status: "working", stage: "Starting" });
       void this.run(j);
     }
