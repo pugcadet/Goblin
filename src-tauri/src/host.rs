@@ -549,8 +549,11 @@ pub async fn http_request(req: HttpReq) -> Result<HttpOut> {
         "GET" => web().get(url),
         _ => return Err(Error::msg("Unsupported request.")),
     };
-    r = r.header("User-Agent", concat!("Goblin/", env!("CARGO_PKG_VERSION"), " ( https://github.com/pugcadet/goblin )"));
-    for (k, v) in req.headers.unwrap_or_default() {
+    let headers = req.headers.unwrap_or_default();
+    if !headers.keys().any(|k| k.eq_ignore_ascii_case("user-agent")) {
+        r = r.header("User-Agent", concat!("Goblin/", env!("CARGO_PKG_VERSION"), " ( https://github.com/pugcadet/goblin )"));
+    }
+    for (k, v) in headers {
         let lk = k.to_ascii_lowercase();
         if ["cookie", "authorization", "host"].contains(&lk.as_str()) {
             continue;
@@ -641,6 +644,29 @@ pub fn fs_list(state: State<'_, AppState>, path: String) -> Result<Vec<Entry>> {
     }
     out.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(out)
+}
+
+/// Small text files Goblin made itself (yt-dlp's info JSON in a work folder).
+#[tauri::command]
+pub fn fs_read_text(state: State<'_, AppState>, path: String) -> Result<Option<String>> {
+    let p = allowed_path(&state, Path::new(&path))?;
+    match std::fs::metadata(&p) {
+        Ok(m) if m.len() <= 64 * 1024 * 1024 => Ok(std::fs::read(&p).ok().map(|b| String::from_utf8_lossy(&b).into_owned())),
+        Ok(_) => Err(Error::msg("Too large.")),
+        Err(_) => Ok(None),
+    }
+}
+
+/// Writes a text file into Goblin's temporary folder only (info JSON for yt-dlp).
+#[tauri::command]
+pub fn fs_write_text(state: State<'_, AppState>, path: String, text: String) -> Result<()> {
+    let tmp = resolved(&tmp_root(&state)).ok_or_else(|| Error::msg("internal error"))?;
+    let p = resolved(Path::new(&path)).filter(|p| p.starts_with(&tmp)).ok_or_else(|| Error::msg("Only Goblin's temporary folder."))?;
+    if let Some(parent) = p.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(p, text)?;
+    Ok(())
 }
 
 #[tauri::command]

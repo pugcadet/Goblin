@@ -64,6 +64,8 @@ pub fn run() {
             host::work_clear,
             host::fs_list,
             host::fs_exists,
+            host::fs_read_text,
+            host::fs_write_text,
             host::fs_size,
             host::fs_move,
             host::fs_mkdirs,
