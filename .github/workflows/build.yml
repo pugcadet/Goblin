@@ -66,6 +66,17 @@ jobs:
 
       # One release per version (v1.1.0, ...), like Media Hub. The .app.tar.gz and the Windows
       # installer are what Goblin's in-app updater downloads, checked against the SHA256SUMS files.
+      # deno (YouTube's player code) crashes under "hardened runtime" ("Failed to reserve virtual memory").
+      - name: Check Mac signing
+        if: matrix.label == 'mac'
+        run: |
+          app=$(ls -d src-tauri/target/${{ matrix.target }}/release/bundle/macos/Goblin.app)
+          for f in "$app"/Contents/MacOS/*; do
+            flags=$(codesign -dv "$f" 2>&1 | grep -o 'flags=[^ ]*' || true)
+            echo "$(basename "$f"): $flags"
+            case "$flags" in *runtime*) echo "::error::$(basename "$f") is signed with hardened runtime"; exit 1;; esac
+          done
+
       - name: Publish release
         if: github.ref == 'refs/heads/main'
         run: |
