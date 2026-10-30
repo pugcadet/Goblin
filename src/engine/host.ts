@@ -119,3 +119,6 @@ export function uid(prefix = "g"): string {
 }
 
 export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** True for full paths: /Users/x, C:\x, C:/x and \\server\share. */
+export const isAbsolute = (p: string) => /^(\/|[A-Za-z]:[\\/]|\\\\)/.test(p);

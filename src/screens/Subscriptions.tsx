@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { askConfirm } from "../confirm";
-import { host } from "../engine/host";
+import { host, uid } from "../engine/host";
 import { Subscription } from "../engine/model";
 import { store } from "../engine/store";
-import { subs } from "../engine/subs";
-import { ago, I, LazyInput, Pic, Select, Switch, toast, useStore, useSubs } from "../ui";
+import { Older, subs } from "../engine/subs";
+import { eta } from "../engine/text";
+import { ago, I, LazyInput, Modal, Pic, Select, Switch, toast, useStore, useSubs } from "../ui";
 
 export default function Subscriptions() {
   const st = useStore();
@@ -13,6 +14,7 @@ export default function Subscriptions() {
   const [preset, setPreset] = useState(st.settings.defaultPresetId);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
+  const [older, setOlder] = useState<Subscription | null>(null);
 
   return (
     <main className="page">
@@ -39,13 +41,14 @@ export default function Subscriptions() {
           {list.length > 0 && <button className="small-btn" onClick={() => subs.check(list.filter((s) => s.status !== "paused").map((s) => s.id))}>{I.retry} Check all now</button>}
         </div>
         {!list.length && <p className="muted empty">No subscriptions yet. Paste a channel, playlist or podcast feed above, or use “Subscribe” in Search.</p>}
-        {list.map((s) => <SubRow key={s.id} s={s} open={open === s.id} onToggle={() => setOpen(open === s.id ? null : s.id)} />)}
+        {list.map((s) => <SubRow key={s.id} s={s} open={open === s.id} onToggle={() => setOpen(open === s.id ? null : s.id)} onOlder={() => setOlder(s)} />)}
       </section>
+      {older && <OlderModal s={older} onClose={() => setOlder(null)} />}
     </main>
   );
 }
 
-function SubRow({ s, open, onToggle }: { s: Subscription; open: boolean; onToggle: () => void }) {
+function SubRow({ s, open, onToggle, onOlder }: { s: Subscription; open: boolean; onToggle: () => void; onOlder: () => void }) {
   const st = useStore();
   const r = s.rules;
   const set = (patch: Parameters<typeof subs.update>[1]) => void subs.update(s.id, patch);
@@ -65,6 +68,7 @@ function SubRow({ s, open, onToggle }: { s: Subscription; open: boolean; onToggl
         <div className="job-actions">
           <button className="small-btn" disabled={s.status === "checking"} onClick={() => subs.check([s.id])}>{I.retry} Check now</button>
           <button className="small-btn" onClick={() => set({ status: s.status === "paused" ? "active" : "paused" })}>{s.status === "paused" ? "Resume" : "Pause"}</button>
+          <button className="small-btn" onClick={onOlder} title="Pick older uploads to download">{I.down} Older videos…</button>
           <button className={`small-btn ${open ? "soft" : ""}`} onClick={onToggle}>{I.sliders} Rules</button>
           <button className="icon" title="Open the link" onClick={() => void host().openUrl(s.url).catch(() => undefined)}>{I.ext}</button>
           <button className="icon" title="Unsubscribe" onClick={async () => (await askConfirm(`Unsubscribe from ${s.name}? Files already downloaded stay.`, { okLabel: "Unsubscribe" })) && void subs.remove([s.id])}>{I.trash}</button>
@@ -94,5 +98,80 @@ function SubRow({ s, open, onToggle }: { s: Subscription; open: boolean; onToggl
         </div>
       )}
     </div>
+  );
+}
+
+const fmtDate = (t?: number) => (t ? new Date(t * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "");
+
+/** Lists what's already on the channel/playlist so you can download older uploads too. */
+function OlderModal({ s, onClose }: { s: Subscription; onClose: () => void }) {
+  const [limit, setLimit] = useState(100);
+  const [items, setItems] = useState<Older[] | null>(null);
+  const [error, setError] = useState("");
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [hideHave, setHideHave] = useState(true);
+  const [onlyRules, setOnlyRules] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const proc = uid("older");
+    let live = true;
+    setItems(null);
+    setError("");
+    subs.older(s.id, limit, proc)
+      .then((list) => {
+        if (!live) return;
+        setItems(list);
+        setSel(new Set(list.filter((e) => e.passes && !e.have).map((e) => e.id)));
+      })
+      .catch((e) => live && setError(e instanceof Error ? e.message : String(e)));
+    return () => { live = false; void host().kill(proc).catch(() => undefined); };
+  }, [s.id, limit]);
+
+  const shown = (items ?? []).filter((e) => (!hideHave || !e.have) && (!onlyRules || e.passes));
+  const picked = (items ?? []).filter((e) => sel.has(e.id));
+  const toggle = (ids: string[], on: boolean) => { const n = new Set(sel); ids.forEach((i) => (on ? n.add(i) : n.delete(i))); setSel(n); };
+
+  return (
+    <Modal wide title={<>Older videos · {s.name}</>} onClose={onClose} footer={<>
+      <span className="muted small grow-text">{picked.length} picked · downloaded with “{store.preset(s.presetId).name}”</span>
+      <button onClick={onClose}>Cancel</button>
+      <button className="primary" disabled={!picked.length || busy} onClick={async () => {
+        setBusy(true);
+        const n = await subs.getOlder(s.id, picked);
+        toast(`Queued ${n} older ${n === 1 ? "video" : "videos"}`, `From ${s.name}, oldest first`);
+        onClose();
+      }}>{I.down} Download {picked.length || ""}</button>
+    </>}>
+      <div className="row checks">
+        <label className="check">Look at the newest <Select value={limit} options={[[50, "50"], [100, "100"], [250, "250"], [1000, "1,000"], [0, "everything"]]} onChange={setLimit} /></label>
+        <label className="check"><Switch checked={onlyRules} onChange={setOnlyRules} /> Only what fits the rules</label>
+        <label className="check"><Switch checked={hideHave} onChange={setHideHave} /> Hide downloaded</label>
+        <div className="spacer" />
+        {!!shown.length && <>
+          <button className="link small" onClick={() => toggle(shown.map((e) => e.id), true)}>Select all</button>
+          <button className="link small" onClick={() => toggle(shown.map((e) => e.id), false)}>None</button>
+        </>}
+      </div>
+      {s.rules.keep > 0 && <p className="muted small">{I.warn} This subscription keeps only the newest {s.rules.keep}: older files go to the Trash as new ones finish. Set “Keep only the newest” to 0 in Rules to keep them all.</p>}
+      {error && <p className="error-text small">{error}</p>}
+      {!items && !error && <p className="muted">Reading the list from YouTube… {limit === 0 && "(everything can take a minute for big channels)"}</p>}
+      {items && !shown.length && <p className="muted empty">{items.length ? "Nothing left to get here. Turn off the filters above to see everything." : "Nothing found."}</p>}
+      {!!shown.length && (
+        <div className="tracks older-list">
+          {shown.map((e) => (
+            <label key={e.id} className={`older ${e.passes ? "" : "off"}`}>
+              <input type="checkbox" checked={sel.has(e.id)} onChange={(x) => toggle([e.id], x.target.checked)} />
+              <Pic src={e.thumb} className="thumb-sm" fallback={I.film} />
+              <span className="ell">{e.title}</span>
+              <span className="muted small">{e.have ? "downloaded" : !e.passes ? "outside rules" : ""}</span>
+              <span className="muted small num-col">{fmtDate(e.time)}</span>
+              <span className="muted small num-col">{eta(e.duration)}</span>
+            </label>
+          ))}
+        </div>
+      )}
+      {items && limit > 0 && items.length >= limit && <button className="link small" onClick={() => setLimit(limit < 250 ? 250 : limit < 1000 ? 1000 : 0)}>Look further back…</button>}
+    </Modal>
   );
 }

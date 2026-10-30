@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, CookieState, errorText, fileManager, isMac, ToolState } from "../api";
-import { host } from "../engine/host";
+import { host, isAbsolute } from "../engine/host";
 import { Settings as S } from "../engine/model";
 import { store } from "../engine/store";
 import { fill, folderParts } from "../engine/text";
@@ -57,7 +57,17 @@ export default function Settings({ tool, onRefresh, onUpdateYtDlp, updating }: {
   const [q, setQ] = useState("");
   useEffect(() => void api.cookiesInfo().then(setCk).catch(() => undefined), []);
   const bm = "javascript:location.href='goblin://add?url='+encodeURIComponent(location.href)";
-  const sub = (k: "dirYoutube" | "dirMusic" | "dirPodcasts" | "dirOther", l: string) => <Row label={l}><LazyInput mono value={s[k]} onCommit={(v) => set({ [k]: v.trim() || ({ dirYoutube: "YouTube", dirMusic: "Music", dirPodcasts: "Podcasts", dirOther: "Other" } as const)[k] })} /></Row>;
+  const DEF = { dirYoutube: "YouTube", dirMusic: "Music", dirPodcasts: "Podcasts", dirOther: "Other" } as const;
+  const sub = (k: keyof typeof DEF, l: string, hint: string) => {
+    const full = isAbsolute(s[k]);
+    return (
+      <Row label={l} hint={full ? hint : `${hint} A name = a sub-folder of the library; or choose any folder.`}>
+        {full ? <span className="mono small path-text" title={s[k]}>{tildify(s[k], home)}</span> : <LazyInput mono value={s[k]} onCommit={(v) => set({ [k]: v.trim() || DEF[k] })} />}
+        <button className="small-btn" onClick={async () => { const [d] = await api.pickPaths("folder").catch(() => [] as string[]); if (d) set({ [k]: d }); }}>{I.folder} Choose…</button>
+        {full && <button className="icon" title={`Back to ${DEF[k]}/ inside the library`} onClick={() => set({ [k]: DEF[k] })}>{I.x}</button>}
+      </Row>
+    );
+  };
   const shown = (id: string, words: string) => !q.trim() || (id + " " + words).toLowerCase().includes(q.toLowerCase());
 
   return (
@@ -75,11 +85,12 @@ export default function Settings({ tool, onRefresh, onUpdateYtDlp, updating }: {
               <button className="small-btn" onClick={() => void api.pickLibrary().then(() => { onRefresh(); void store.refreshInfo(); })}>{I.folder} Choose…</button>
               <button className="small-btn" onClick={() => void host().reveal(st.library).catch((e) => toast("Couldn't open it", errorText(e)))}>Open in {fileManager}</button>
             </Row>
-            <Row label="Inside it" hint="Rename the sub-folders below if you like."><span className="mono small">{s.dirYoutube}/ · {s.dirMusic}/ · {s.dirPodcasts}/ · {s.dirOther}/</span></Row>
-            {sub("dirYoutube", "Videos sub-folder")}
-            {sub("dirMusic", "Music sub-folder")}
-            {sub("dirPodcasts", "Podcasts sub-folder")}
-            {sub("dirOther", "“Keep original title” sub-folder")}
+            <div className="groupt">Where each type goes</div>
+            {sub("dirYoutube", "Videos", "YouTube and other videos.")}
+            {sub("dirMusic", "Music", "Songs and albums, also from YouTube Music and Search.")}
+            {sub("dirPodcasts", "Podcasts", "Presets with Podcast mode.")}
+            {sub("dirOther", "“Keep original title”", "Presets that keep the original name.")}
+            <p className="muted small">A preset's own “Save to” folder (Presets) and a per-download folder (Downloads → Advanced) still win over these.</p>
             <Row label="Default preset"><Select value={s.defaultPresetId} options={st.presets.map((p) => [p.id, p.name])} onChange={(v) => set({ defaultPresetId: v })} /></Row>
           </section>
         )}
@@ -87,9 +98,9 @@ export default function Settings({ tool, onRefresh, onUpdateYtDlp, updating }: {
           <section className="card form" id="s-naming">
             <h2>Names & folders</h2>
             <Row wide label="Video file name" hint="Videos with “Channel folder + name pattern” presets."><NamingInput kind="video" value={s.videoName} onChange={(v) => set({ videoName: v || "{title}" })} /></Row>
-            <Row wide label="Video folders" hint={`Inside ${s.dirYoutube}. Use “/” for sub-folders.`}><NamingInput kind="ytfolder" value={s.youtubeFolder} onChange={(v) => set({ youtubeFolder: v })} /></Row>
+            <Row wide label="Video folders" hint="Inside the Videos folder. Use “/” for sub-folders."><NamingInput kind="ytfolder" value={s.youtubeFolder} onChange={(v) => set({ youtubeFolder: v })} /></Row>
             <Row wide label="Song file name" hint="Inside the album folder."><NamingInput kind="track" value={s.trackName} onChange={(v) => set({ trackName: v || "{title}" })} /></Row>
-            <Row wide label="Music folders" hint={`Inside ${s.dirMusic}, for presets with Artist / Album folders.`}><NamingInput kind="musicfolder" value={s.musicFolder} onChange={(v) => set({ musicFolder: v })} /></Row>
+            <Row wide label="Music folders" hint="Inside the Music folder, for presets with Artist / Album folders."><NamingInput kind="musicfolder" value={s.musicFolder} onChange={(v) => set({ musicFolder: v })} /></Row>
             <div className="groupt">“Keep original title” templates (yt-dlp syntax)</div>
             <Row label="Single video"><LazyInput mono value={s.outputTemplate} placeholder="%(title)s [%(id)s].%(ext)s" onCommit={(v) => set({ outputTemplate: v })} /></Row>
             <Row label="Playlist item"><LazyInput mono value={s.outputTemplatePlaylist} placeholder="%(playlist_title)s/%(playlist_index)02d - %(title)s.%(ext)s" onCommit={(v) => set({ outputTemplatePlaylist: v })} /></Row>

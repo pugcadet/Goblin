@@ -1,5 +1,5 @@
 // Settings and presets, kept as small JSON files in Goblin's data folder.
-import { host, HostInfo, join } from "./host";
+import { host, HostInfo, isAbsolute, join } from "./host";
 import { BUILT_IN, merged, Preset, PRESET_DEFAULTS, Settings, SETTINGS_DEFAULTS } from "./model";
 
 type Listener = () => void;
@@ -44,8 +44,9 @@ class Store {
     return this.info?.library ?? join(this.info?.home ?? "", "Downloads", "Goblin");
   }
 
+  /** A type's folder: a sub-folder name inside the library, or a full path you picked (anywhere, e.g. the NAS). */
   dir(sub: string): string {
-    return join(this.library, sub);
+    return isAbsolute(sub) ? sub : join(this.library, sub);
   }
 
   preset(id: string | undefined): Preset {

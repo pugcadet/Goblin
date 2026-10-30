@@ -308,3 +308,13 @@ details.more > summary { cursor: pointer; padding: 6px 0; list-style: none; }
 details.more > summary::-webkit-details-marker { display: none; }
 details.more > summary::before { content: "▸ "; }
 details.more[open] > summary::before { content: "▾ "; }
+
+/* Subscriptions → Older videos */
+.older-list { max-height: 55vh; overflow: auto; }
+.older { display: grid; grid-template-columns: 22px 64px minmax(0, 1fr) auto 96px 52px; gap: 10px; align-items: center; padding: 6px 12px; border-top: 1px solid var(--line); font-size: 13px; cursor: pointer; }
+.older:first-child { border-top: 0; }
+.older:hover { background: var(--panel2); }
+.older.off { opacity: .55; }
+.older .thumb-sm { width: 64px; height: 36px; border-radius: 5px; }
+.older .num-col { text-align: right; font-variant-numeric: tabular-nums; }
+.modal-foot .grow-text { margin-right: auto; }

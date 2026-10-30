@@ -5,9 +5,24 @@ import { jobs } from "./jobs";
 import { effective, merged, Options, RULE_DEFAULTS, Subscription, SubRules } from "./model";
 import { store } from "./store";
 import { isWebUrl } from "./text";
-import { bestThumbnail, entryURL, flat, J, thumbById } from "./ytdlp";
+import { bestThumbnail, entryURL, flat, J, thumbById, videoID } from "./ytdlp";
 
 type Listener = () => void;
+
+/** One upload in "Download older videos". */
+export interface Older {
+  id: string;
+  url: string;
+  title: string;
+  /** Upload time in seconds (YouTube's list only gives an approximate one). */
+  time?: number;
+  duration?: number;
+  thumb?: string;
+  /** Matches this subscription's rules (Shorts, length, words…). */
+  passes: boolean;
+  /** Already downloaded (in Goblin's list or its "remember downloaded videos" archive). */
+  have: boolean;
+}
 
 class Subs {
   list: Subscription[] = [];
@@ -166,6 +181,48 @@ class Subs {
       Object.assign(sub, { lastChecked: Date.now(), status: "error", error: e instanceof Error ? e.message : String(e) });
     }
     await this.save();
+  }
+
+  /** The channel's or playlist's uploads, newest first: the newest `limit` (0 = everything). */
+  async older(id: string, limit: number, procId?: string): Promise<Older[]> {
+    const sub = this.list.find((s) => s.id === id);
+    if (!sub) return [];
+    const list = await flat(sub.url, limit, true, procId);
+    const archive = new Set(((await host().read("archive.txt").catch(() => null)) ?? "").split("\n").map((l) => l.trim().split(/\s+/)[1]).filter(Boolean));
+    const done = new Set<string>();
+    for (const j of jobs.snapshot()) {
+      if (j.status !== "done") continue;
+      const v = videoID(j.url ?? j.input);
+      if (v) done.add(v);
+    }
+    const out: Older[] = [];
+    for (const e of (list.entries ?? []) as J[]) {
+      const url = entryURL(e);
+      if (!e.id || !url || e.live_status === "is_upcoming") continue;
+      out.push({
+        id: e.id, url, title: e.title ?? e.id, time: e.timestamp ?? e.release_timestamp ?? undefined, duration: e.duration ?? undefined,
+        thumb: e.thumbnails?.slice(-1)[0]?.url, passes: passes(e, { ...sub, rules: { ...sub.rules, days: 0, maxPer: 0 } }), have: archive.has(e.id) || done.has(e.id),
+      });
+    }
+    return out;
+  }
+
+  /** Queues picked older uploads with this subscription's preset and options (oldest first). */
+  async getOlder(id: string, picked: Older[]): Promise<number> {
+    const sub = this.list.find((s) => s.id === id);
+    if (!sub) return 0;
+    let queued = 0;
+    for (const e of [...picked].sort((a, b) => (a.time ?? 0) - (b.time ?? 0))) {
+      queued += jobs.add(e.url, { ...sub.options, presetId: sub.presetId }, { titleHint: e.title, thumb: e.thumb, subId: sub.id, subName: sub.name }).length;
+    }
+    // Remember them as seen, so the next check doesn't queue them again.
+    const seenList = ((await host().read(`seen-${id}.txt`)) ?? "").split("\n").filter(Boolean);
+    const seen = new Set(seenList);
+    for (const e of picked) if (!seen.has(e.id)) seenList.push(e.id);
+    await host().write(`seen-${id}.txt`, seenList.slice(-Math.max(100, store.settings.subMaxSeen, seenList.length)).join("\n"));
+    sub.seen = seenList.length;
+    await this.save();
+    return queued;
   }
 
   /** "Keep only the newest N": after each finished download from a subscription, older files go to the Trash. */

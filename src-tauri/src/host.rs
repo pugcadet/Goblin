@@ -157,7 +157,9 @@ pub fn allowed_path(state: &AppState, p: &Path) -> Result<PathBuf> {
 fn grant(state: &AppState, p: &Path) -> Result<()> {
     let s = p.to_string_lossy().into_owned();
     state.update_settings(move |st| {
-        if !st.granted.contains(&s) {
+        // A folder picked again moves to the end, so folders in use are never the ones dropped.
+        st.granted.retain(|g| g != &s);
+        {
             st.granted.push(s);
             // Keep the list short: the newest 200 picks.
             if st.granted.len() > 200 {
