@@ -11,7 +11,8 @@ cd "$(dirname "$0")/.."
 
 OUT=src-tauri/binaries
 mkdir -p "$OUT"
-TRIPLE="${TRIPLE:-$(rustc -vV | sed -n 's/^host: //p')}"
+TRIPLE="${TRIPLE:-}"
+[[ -n "$TRIPLE" ]] || TRIPLE="$(rustc -vV | sed -n 's/^host: //p')"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 

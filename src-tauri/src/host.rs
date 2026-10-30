@@ -1076,8 +1076,10 @@ mod tests {
 
     #[test]
     fn paths_never_climb_out() {
-        assert!(clean_abs(Path::new("/a/b/../c")).is_none());
-        assert_eq!(clean_abs(Path::new("/a/./b")).unwrap(), PathBuf::from("/a/b"));
+        // An absolute path on this computer (C:\... on Windows, /... elsewhere).
+        let base = std::env::temp_dir();
+        assert!(clean_abs(&base.join("a").join("..").join("c")).is_none());
+        assert_eq!(clean_abs(&base.join("a").join(".").join("b")).unwrap(), clean_abs(&base).unwrap().join("a").join("b"));
         assert!(clean_abs(Path::new("relative/x")).is_none());
     }
 
