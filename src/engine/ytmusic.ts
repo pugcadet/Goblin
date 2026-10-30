@@ -111,7 +111,7 @@ function item(r: J): YTMItem {
   // Second column: "Artist • Album • 3:07" (songs) or "Album • Artist • 2003" (albums), in any order.
   const meta: J[] = [...cols.slice(1).flat(), ...(((r.subtitle?.runs as J[]) ?? []))];
   const artists: string[] = [];
-  const firstText = meta.map((x) => x.text).find((t) => typeof t === "string");
+  const firstText: string = meta.map((x) => x.text).find((t) => typeof t === "string") ?? "";
   if (["Album", "Single", "EP"].includes(firstText)) it.kind = firstText;
   for (const run of meta) {
     const t = run.text;
