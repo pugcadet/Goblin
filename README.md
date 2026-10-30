@@ -11,7 +11,7 @@ and its look and update system (`updater.rs`, `Updates.tsx`).
 
 | Screen | |
 | --- | --- |
-| **Downloads** | Paste links one per line (⌘/Ctrl+Enter) or type “Artist - Song”. Pick a preset, or change quality, format, codec, audio format and “Tags + cover” for this download only. **Advanced**: own folder, name prefix, SponsorBlock, split by chapters, clip (start → end), start right away or keep pending, playlist limit, subscription check/filter, members-only, video password, extra yt-dlp options, cookies.txt, import / copy URLs. **Auto-detect** looks at what you paste and suggests (or applies) the right preset, or offers *Subscribe instead*. **Preview** shows qualities, size, subtitles, chapters and whether audio is the official track. |
+| **Downloads** | Paste links one per line (⌘/Ctrl+Enter) or type “Artist - Song”. Pick a preset, or change quality, format, codec, audio format and “Tags + cover” for this download only. **Advanced**: own folder, name prefix, SponsorBlock, split by chapters, clip (start → end), start right away or keep pending, playlist limit, subscription check/filter, members-only, video password, extra yt-dlp options, import / copy URLs. **Auto-detect** looks at what you paste and suggests (or applies) the right preset, or offers *Subscribe instead*. **Preview** shows qualities, size, subtitles, chapters and whether audio is the official track. |
 | **Queue** | A few downloads at once, the rest wait. Live stage, progress, speed, time left, size. Low-confidence music matches pause and show options (pick one, search, or keep the title). Logs per download. Completed list with Done / Failed filters, albums and playlists grouped, select-all and bulk retry / remove / delete files, Show in Finder/Explorer. History is kept between starts. |
 | **Search** | **Music**: YouTube Music's own song search (its order and covers), with plays, filters (hide covers/karaoke/tributes, minimum plays, most played, per artist) and *Load more*. **Albums**: the albums behind the top songs plus YouTube Music's album search, deluxe / singles filters, tick several to download at once, **Artist discography** (Deezer). **Videos**: YouTube, download or subscribe, bulk select. **Podcasts**: Apple Podcasts directory, subscribe to the feed. |
 | **Album finder** | Open any album: its tracklist, untick tracks, choose the cover (YouTube Music, Apple Music, Deezer, Cover Art Archive, your own picture or a link), MusicBrainz editions, every track checked against YouTube Music (✓ / ⚠ / pick another upload), then download with all tags decided. |
@@ -60,8 +60,13 @@ repositories; while this repository is private, download new versions from the R
 - **The window can only do a short list of things** (`src-tauri/src/host.rs`): web requests only to MusicBrainz,
   Cover Art Archive, LRCLIB, Deezer, Apple, YouTube Music and their picture servers; files only inside your library
   folder, Goblin's own data folder and folders you picked in a dialog; deleting only to the Trash / Recycle Bin.
-- **Cookies are off by default.** A cookies.txt (or a browser) is only used when YouTube says a video is
-  age-restricted or members-only: that one video, one at a time, 30 s apart, with a daily cap.
+- **YouTube sign-in is optional and local.** Settings → YouTube sign-in → *Sign in to YouTube…* opens Google's own
+  sign-in page in a private window that can't talk to Goblin. Once you're signed in, Goblin copies only the
+  youtube.com cookies (no password, no google.com cookies) to `cookies.txt` in its own data folder (readable only
+  by you), closes the window and throws its session away. *Sign out* deletes the file. Nothing leaves your computer
+  except the normal requests to YouTube.
+- **The sign-in is only used when YouTube says a video is age-restricted or members-only**: that one video, one at
+  a time, 30 s apart, with a daily cap. Search, subscriptions, YouTube Music and normal videos never send it.
 
 ## Building it yourself
 

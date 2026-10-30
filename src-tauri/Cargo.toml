@@ -1,6 +1,6 @@
 [package]
 name = "goblin"
-version = "1.2.0"
+version = "1.2.1"
 description = "Goblin: simple, local video and music downloader (yt-dlp)"
 edition = "2021"
 rust-version = "1.77"

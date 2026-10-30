@@ -956,7 +956,7 @@ pub async fn cookies_load(app: AppHandle) -> Result<CookieState> {
         if !looks_ok || text.len() > 4 * 1024 * 1024 {
             return Err(Error::msg("That doesn't look like a cookies.txt file (Netscape format)."));
         }
-        std::fs::write(cookies_file(&state), text)?;
+        write_private(&cookies_file(&state), &text)?;
         let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "cookies.txt".into());
         state.update_settings(move |s| s.cookies_name = Some(name))?;
     }
@@ -964,9 +964,143 @@ pub async fn cookies_load(app: AppHandle) -> Result<CookieState> {
 }
 
 #[tauri::command]
-pub fn cookies_delete(state: State<'_, AppState>) -> Result<CookieState> {
+pub fn cookies_delete(app: AppHandle, state: State<'_, AppState>) -> Result<CookieState> {
+    if let Some(w) = app.get_webview_window(SIGNIN) {
+        let _ = w.destroy();
+    }
     let _ = std::fs::remove_file(cookies_file(&state));
     cookie_state(&state)
+}
+
+/// Writes a file only you can read (on Mac; Windows keeps it in your own user folder).
+fn write_private(path: &Path, text: &str) -> Result<()> {
+    std::fs::write(path, text)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    Ok(())
+}
+
+// ------------------------------------------------------------------ YouTube sign-in
+
+const SIGNIN: &str = "signin";
+const SIGNIN_START: &str = "https://accounts.google.com/ServiceLogin?service=youtube&uilel=3&hl=en&continue=https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26app%3Ddesktop%26next%3D%252F";
+/// Cookies that only exist once YouTube has a signed-in session.
+const LOGIN_COOKIES: [&str; 3] = ["LOGIN_INFO", "SAPISID", "__Secure-3PSID"];
+
+/// One cookie as yt-dlp needs it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Jar {
+    pub domain: String,
+    pub path: String,
+    pub secure: bool,
+    pub expires: i64,
+    pub name: String,
+    pub value: String,
+}
+
+/// Keeps YouTube's cookies only (no google.com account cookies) and says whether they hold a sign-in.
+pub fn youtube_only(all: Vec<Jar>) -> (Vec<Jar>, bool) {
+    let keep: Vec<Jar> = all
+        .into_iter()
+        .filter(|c| {
+            let d = c.domain.trim_start_matches('.').to_ascii_lowercase();
+            d == "youtube.com" || d.ends_with(".youtube.com")
+        })
+        .collect();
+    let signed_in = keep.iter().any(|c| LOGIN_COOKIES.contains(&c.name.as_str()) && !c.value.is_empty());
+    (keep, signed_in)
+}
+
+/// Netscape cookies.txt, the format yt-dlp reads.
+pub fn netscape(cookies: &[Jar], now: i64) -> String {
+    let mut out = String::from("# Netscape HTTP Cookie File\n# Saved by Goblin's YouTube sign-in. Delete it in Settings → YouTube sign-in.\n\n");
+    let mut seen = HashSet::new();
+    for c in cookies {
+        let domain = if c.domain.starts_with('.') { c.domain.clone() } else { format!(".{}", c.domain) };
+        if !seen.insert((domain.clone(), c.path.clone(), c.name.clone())) {
+            continue;
+        }
+        let clean = |s: &str| s.replace(['\t', '\n', '\r'], "");
+        let exp = if c.expires > 0 { c.expires } else { now + 180 * 86_400 };
+        let path = if c.path.is_empty() { "/".to_string() } else { clean(&c.path) };
+        out.push_str(&[clean(&domain), "TRUE".into(), path, (if c.secure { "TRUE" } else { "FALSE" }).into(), exp.to_string(), clean(&c.name), clean(&c.value)].join("\t"));
+        out.push('\n');
+    }
+    out
+}
+
+fn jar(c: &tauri::webview::Cookie<'static>) -> Jar {
+    Jar {
+        domain: c.domain().unwrap_or("").to_string(),
+        path: c.path().unwrap_or("/").to_string(),
+        secure: c.secure().unwrap_or(false),
+        expires: c.expires_datetime().map(|t| t.unix_timestamp()).unwrap_or(0),
+        name: c.name().to_string(),
+        value: c.value().to_string(),
+    }
+}
+
+fn now_secs() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+}
+
+/// Opens Google's own sign-in page in a private window (nothing is kept on disk by the window, and it
+/// can't talk to Goblin). As soon as YouTube shows you as signed in, Goblin copies only the youtube.com
+/// cookies into its cookies.txt (readable only by you), closes the window and throws its session away.
+#[tauri::command]
+pub async fn youtube_sign_in(app: AppHandle) -> Result<CookieState> {
+    if let Some(w) = app.get_webview_window(SIGNIN) {
+        let _ = w.set_focus();
+        return Err(Error::msg("The sign-in window is already open."));
+    }
+    let url: tauri::Url = SIGNIN_START.parse().map_err(|_| Error::msg("bad sign-in address"))?;
+    let mut b = tauri::WebviewWindowBuilder::new(&app, SIGNIN, tauri::WebviewUrl::External(url))
+        .title("Sign in to YouTube")
+        .inner_size(520.0, 720.0)
+        .center()
+        .incognito(true)
+        // Only real web pages; no file:, data: or custom schemes.
+        .on_navigation(|u| u.scheme() == "https" || u.as_str() == "about:blank");
+    // Google refuses sign-in from "embedded" browsers. WebView2 already presents as Edge; WebKit needs Safari's name.
+    if cfg!(target_os = "macos") {
+        b = b.user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15");
+    }
+    let win = b.build().map_err(|e| Error::msg(format!("Could not open the sign-in window: {e}")))?;
+
+    let started = Instant::now();
+    let mut seen_signed_in = 0;
+    loop {
+        tauri::async_runtime::spawn_blocking(|| std::thread::sleep(Duration::from_millis(1500))).await.ok();
+        if app.get_webview_window(SIGNIN).is_none() {
+            return Err(Error::msg("Sign-in cancelled."));
+        }
+        if started.elapsed() > Duration::from_secs(20 * 60) {
+            let _ = win.destroy();
+            return Err(Error::msg("Sign-in took too long, try again."));
+        }
+        // Read cookies on another thread: on Windows this waits for the window's own thread.
+        let w = win.clone();
+        let all = tauri::async_runtime::spawn_blocking(move || w.cookies()).await.ok().and_then(|r| r.ok()).unwrap_or_default();
+        let (keep, signed_in) = youtube_only(all.iter().map(jar).collect());
+        if !signed_in {
+            seen_signed_in = 0;
+            continue;
+        }
+        // Give YouTube a moment to finish setting its cookies after the redirect.
+        seen_signed_in += 1;
+        if seen_signed_in < 2 {
+            continue;
+        }
+        let state = app.state::<AppState>();
+        write_private(&cookies_file(&state), &netscape(&keep, now_secs()))?;
+        state.update_settings(|s| s.cookies_name = Some("YouTube sign-in".into()))?;
+        let _ = win.clear_all_browsing_data();
+        let _ = win.destroy();
+        return cookie_state(&state);
+    }
 }
 
 // ------------------------------------------------------------------ lyrics inside MP3s
@@ -1070,6 +1204,23 @@ pub fn links_take() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn c(domain: &str, name: &str) -> Jar {
+        Jar { domain: domain.into(), path: "/".into(), secure: true, expires: 0, name: name.into(), value: "v\tx".into() }
+    }
+
+    #[test]
+    fn sign_in_keeps_youtube_cookies_only() {
+        let all = vec![c(".youtube.com", "PREF"), c(".google.com", "SID"), c("accounts.google.com", "LSID"), c("notyoutube.com", "X"), c("www.youtube.com", "LOGIN_INFO")];
+        let (keep, signed_in) = youtube_only(all.clone());
+        assert!(signed_in);
+        assert_eq!(keep.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), ["PREF", "LOGIN_INFO"]);
+        assert!(!youtube_only(all[..4].to_vec()).1, "no login cookie yet");
+        let txt = netscape(&keep, 1000);
+        assert!(txt.starts_with("# Netscape HTTP Cookie File"));
+        assert!(txt.contains(".www.youtube.com\tTRUE\t/\tTRUE\t15553000\tLOGIN_INFO\tvx\n"), "{txt}");
+        assert!(!txt.contains("google.com\t"));
+    }
 
     #[test]
     fn refuses_dangerous_ytdlp_options() {

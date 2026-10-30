@@ -301,3 +301,10 @@ label.check { white-space: nowrap; }
   .nav button { padding: 0 9px; }
   header > .mono { display: none; }
 }
+
+/* folded-away extra options inside a settings card */
+details.more { margin-top: 6px; }
+details.more > summary { cursor: pointer; padding: 6px 0; list-style: none; }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::before { content: "▸ "; }
+details.more[open] > summary::before { content: "▾ "; }

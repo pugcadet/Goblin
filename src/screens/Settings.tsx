@@ -53,6 +53,7 @@ export default function Settings({ tool, onRefresh, onUpdateYtDlp, updating }: {
   const set = (patch: Partial<S>) => void store.saveSettings(patch);
   const home = st.info?.home ?? "";
   const [ck, setCk] = useState<CookieState | null>(null);
+  const [signing, setSigning] = useState(false);
   const [q, setQ] = useState("");
   useEffect(() => void api.cookiesInfo().then(setCk).catch(() => undefined), []);
   const bm = "javascript:location.href='goblin://add?url='+encodeURIComponent(location.href)";
@@ -147,14 +148,26 @@ export default function Settings({ tool, onRefresh, onUpdateYtDlp, updating }: {
           <section className="card form" id="s-signin">
             <h2>YouTube sign-in</h2>
             <p className="muted small">Never used by default. Only when YouTube says a video is <b>age-restricted or members-only</b> is that one video retried signed in: one at a time, at least 30 s apart, with pauses between requests. Search, subscriptions, YouTube Music and normal videos never send your cookies. Tip: use a spare account.</p>
-            <Row label="cookies.txt file" hint="Exported from your browser (Netscape format), for example with a “Get cookies.txt” extension. Goblin keeps its own copy.">
-              <span className={`dot ${ck?.loaded ? "on" : ""}`} /><span className="muted small">{ck?.loaded ? ck.name : "None loaded"}</span>
-              <button className="small-btn" onClick={() => void api.cookiesLoad().then((c) => { setCk(c); void store.refreshInfo(); }).catch((e) => toast("Couldn't load it", errorText(e)))}>Load…</button>
-              {ck?.loaded && <button className="small-btn danger-outline" onClick={() => void api.cookiesDelete().then((c) => { setCk(c); void store.refreshInfo(); })}>Delete</button>}
+            <Row label="Account" hint={ck?.loaded ? (ck.name === "YouTube sign-in" ? "Signed in. Only the youtube.com cookies are kept, in Goblin's own folder (readable only by you)." : `Using ${ck.name}.`) : "Opens Google's own sign-in page in a private window. Goblin keeps only the youtube.com cookies, never your password, and the window's session is thrown away."}>
+              <span className={`dot ${ck?.loaded ? "on" : ""}`} /><span className="muted small">{ck?.loaded ? (ck.name === "YouTube sign-in" ? "Signed in" : ck.name) : "Not signed in"}</span>
+              <button className={ck?.loaded ? "small-btn" : "primary"} disabled={signing} onClick={() => {
+                setSigning(true);
+                void api.youtubeSignIn()
+                  .then((c) => { setCk(c); void store.refreshInfo(); toast("Signed in to YouTube", "Used only for age-restricted and members-only videos."); })
+                  .catch((e) => { const t = errorText(e); if (!/cancelled/i.test(t)) toast("Sign-in didn't finish", t); })
+                  .finally(() => setSigning(false));
+              }}>{I.user} {signing ? "Waiting for sign-in…" : ck?.loaded ? "Sign in again…" : "Sign in to YouTube…"}</button>
+              {ck?.loaded && <button className="small-btn danger-outline" onClick={() => void api.cookiesDelete().then((c) => { setCk(c); void store.refreshInfo(); toast("Signed out", "Goblin's copy of the cookies is deleted."); })}>Sign out</button>}
             </Row>
-            <Row label="Or read cookies from a browser" hint={`Used only when there is no cookies.txt. ${isMac ? "Safari needs Full Disk Access for Goblin; Chrome-based browsers ask for Keychain access." : "On Windows, Firefox works best; Chrome and Edge often block this."}`}>
-              <Select value={tool?.cookies ?? ""} options={[["", "Off"], ["firefox", "Firefox"], ["chrome", "Chrome"], ["edge", "Edge"], ["brave", "Brave"], ["safari", "Safari"], ["chromium", "Chromium"], ["opera", "Opera"], ["vivaldi", "Vivaldi"]]} onChange={(v) => void api.setCookieBrowser(v || null).then(() => { onRefresh(); void store.refreshInfo(); })} />
-            </Row>
+            <details className="more">
+              <summary className="muted small">Other ways (cookies.txt file, browser cookies)</summary>
+              <Row label="cookies.txt file" hint="Exported from your browser (Netscape format). Goblin keeps its own copy, replacing the sign-in.">
+                <button className="small-btn" onClick={() => void api.cookiesLoad().then((c) => { setCk(c); void store.refreshInfo(); }).catch((e) => toast("Couldn't load it", errorText(e)))}>Load…</button>
+              </Row>
+              <Row label="Read cookies from a browser" hint={`Used only when you're not signed in above. ${isMac ? "Safari needs Full Disk Access for Goblin; Chrome-based browsers ask for Keychain access." : "On Windows, Firefox works best; Chrome and Edge often block this."}`}>
+                <Select value={tool?.cookies ?? ""} options={[["", "Off"], ["firefox", "Firefox"], ["chrome", "Chrome"], ["edge", "Edge"], ["brave", "Brave"], ["safari", "Safari"], ["chromium", "Chromium"], ["opera", "Opera"], ["vivaldi", "Vivaldi"]]} onChange={(v) => void api.setCookieBrowser(v || null).then(() => { onRefresh(); void store.refreshInfo(); })} />
+              </Row>
+            </details>
             <Row label="Signed-in downloads per day" hint="A cap so a big queue can't hammer your account."><LazyInput type="number" className="num" value={String(s.cookieDailyMax)} onCommit={(v) => set({ cookieDailyMax: Math.max(1, Number(v) || 20) })} /></Row>
           </section>
         )}

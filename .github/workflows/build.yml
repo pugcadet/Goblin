@@ -88,8 +88,18 @@ jobs:
             gh release delete "$old" --yes --cleanup-tag || true
           done
           # Both computers add their files to the same release.
-          gh release create "$tag" --title "Goblin $version" --notes "Download Goblin-macos.dmg (Mac) or Goblin-windows-setup.exe (Windows). Already installed? Goblin updates itself: Settings → Goblin updates." 2>/dev/null || true
-          gh release upload "$tag" out/* --clobber
+          # (Both may try to create it at the same moment; whoever is second just uploads.)
+          {
+            gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "Goblin $version" --notes "Download Goblin-macos.dmg (Mac) or Goblin-windows-setup.exe (Windows). Already installed? Goblin updates itself: Settings → Goblin updates." || true
+            ok=0
+            for i in 1 2 3 4; do
+              sleep $((i * 5))
+              if gh release upload "$tag" out/* --clobber; then ok=1; break; fi
+              echo "upload try $i failed, retrying"
+            done
+            [ "$ok" = 1 ]
+          } 2>&1 | tee -a ci.log
+          exit "${PIPESTATUS[0]}"
 
       # Always runs, also after a failure: copies the log (and the lock files, which
       # pin the exact package versions) to a branch so it can be read and fixed.

@@ -33,6 +33,7 @@ export const api = {
   cookiesInfo: () => invoke<CookieState>("cookies_info"),
   cookiesLoad: () => invoke<CookieState>("cookies_load"),
   cookiesDelete: () => invoke<CookieState>("cookies_delete"),
+  youtubeSignIn: () => invoke<CookieState>("youtube_sign_in"),
   linksTake: () => invoke<string[]>("links_take"),
   imageData: (path: string) => invoke<string | null>("image_data", { path }),
   checkUpdate: () => invoke<UpdateInfo>("check_update"),

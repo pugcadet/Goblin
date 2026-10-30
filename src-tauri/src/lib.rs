@@ -82,6 +82,7 @@ pub fn run() {
             host::cookies_info,
             host::cookies_load,
             host::cookies_delete,
+            host::youtube_sign_in,
             host::mp3_add_lyrics,
             host::links_take,
             updater::check_update,
