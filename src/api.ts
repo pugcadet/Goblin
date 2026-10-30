@@ -16,6 +16,8 @@ export interface UpdateInfo {
   latest: string | null;
   available: boolean;
   notes: string;
+  /** A newer version whose file for this computer is still being built. */
+  pending?: string | null;
 }
 
 export interface CookieState {

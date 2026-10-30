@@ -67,11 +67,13 @@ pub struct UpdateInfo {
     latest: Option<String>,
     available: bool,
     notes: String,
+    /// A newer version whose file for this computer is still being built (Mac and Windows finish at different times).
+    pending: Option<String>,
 }
 
-async fn latest_release() -> Result<Value> {
+async fn releases() -> Result<Vec<Value>> {
     let resp = http()?
-        .get(format!("https://api.github.com/repos/{REPO}/releases/latest"))
+        .get(format!("https://api.github.com/repos/{REPO}/releases?per_page=15"))
         .header("Accept", "application/vnd.github+json")
         .send()
         .await
@@ -84,21 +86,44 @@ async fn latest_release() -> Result<Value> {
     }
 }
 
+fn version_of(rel: &Value) -> String {
+    rel.get("tag_name").and_then(Value::as_str).unwrap_or("").trim_start_matches('v').to_string()
+}
+
+fn ready_here(rel: &Value) -> bool {
+    asset_url(rel, asset_name()).is_some() && asset_url(rel, &format!("SHA256SUMS-{}.txt", platform())).is_some()
+}
+
+/// (newest release with a file and checksum for this computer, newest version published at all)
+pub fn pick(list: &[Value]) -> (Option<&Value>, Option<String>) {
+    let mut rels: Vec<&Value> = list
+        .iter()
+        .filter(|r| !r.get("draft").and_then(Value::as_bool).unwrap_or(false) && !r.get("prerelease").and_then(Value::as_bool).unwrap_or(false))
+        .filter(|r| parse_version(&version_of(r)) != (0, 0, 0))
+        .collect();
+    rels.sort_by_key(|r| std::cmp::Reverse(parse_version(&version_of(r))));
+    let newest = rels.first().map(|r| version_of(r));
+    (rels.into_iter().find(|r| ready_here(r)), newest)
+}
+
+async fn latest_release() -> Result<Value> {
+    let list = releases().await?;
+    pick(&list).0.cloned().ok_or_else(|| Error::msg("No release has a file for this computer yet."))
+}
+
 #[tauri::command]
 pub async fn check_update() -> Result<UpdateInfo> {
     let current = env!("CARGO_PKG_VERSION").to_string();
-    let rel = latest_release().await?;
-    let latest = rel.get("tag_name").and_then(Value::as_str).map(|t| t.trim_start_matches('v').to_string());
-    let has_asset = rel
-        .get("assets")
-        .and_then(Value::as_array)
-        .map(|a| a.iter().any(|x| x.get("name").and_then(Value::as_str) == Some(asset_name())))
-        .unwrap_or(false);
+    let list = releases().await?;
+    let (rel, newest) = pick(&list);
+    let latest = rel.map(version_of);
+    let pending = newest.filter(|n| newer(n, &current) && Some(n) != latest.as_ref());
     Ok(UpdateInfo {
-        available: has_asset && latest.as_deref().map(|l| newer(l, &current)).unwrap_or(false),
-        notes: rel.get("body").and_then(Value::as_str).unwrap_or("").chars().take(2000).collect(),
+        available: latest.as_deref().map(|l| newer(l, &current)).unwrap_or(false),
+        notes: rel.and_then(|r| r.get("body")).and_then(Value::as_str).unwrap_or("").chars().take(2000).collect(),
         latest,
         current,
+        pending,
     })
 }
 
@@ -205,6 +230,23 @@ mod tests {
         assert!(!newer("v0.9.0", "0.9.0"));
         assert!(!newer("garbage", "0.1.0"));
         assert_eq!(parse_version("v1.2.3-beta"), (1, 2, 3));
+    }
+
+    #[test]
+    fn picks_newest_release_ready_for_this_computer() {
+        let url = |n: &str| format!("https://github.com/x/releases/download/{n}");
+        let full = |v: &str| serde_json::json!({"tag_name": v, "assets": [
+            {"name": asset_name(), "browser_download_url": url(asset_name())},
+            {"name": format!("SHA256SUMS-{}.txt", platform()), "browser_download_url": url("s")}]});
+        let half = serde_json::json!({"tag_name": "v1.3.0", "assets": [{"name": "other", "browser_download_url": url("o")}]});
+        let list = vec![half, full("v1.2.1"), full("v1.10.0-x"), full("v1.2.0")];
+        let (rel, newest) = pick(&list);
+        assert_eq!(rel.map(version_of).as_deref(), Some("1.10.0-x"), "sorted by version, not by list order");
+        assert_eq!(newest.as_deref(), Some("1.10.0-x"));
+        let list = vec![serde_json::json!({"tag_name": "v1.3.0", "assets": []}), full("v1.2.1")];
+        let (rel, newest) = pick(&list);
+        assert_eq!(rel.map(version_of).as_deref(), Some("1.2.1"));
+        assert_eq!(newest.as_deref(), Some("1.3.0"));
     }
 
     #[test]

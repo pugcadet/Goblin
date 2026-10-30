@@ -35,7 +35,7 @@ export function UpdateSettings() {
         <div>
           <div>Version {info?.current ?? "…"}</div>
           <div className="muted small">
-            {info ? (info.available ? `Goblin ${info.latest} is out.` : `You have the newest version${info.latest ? ` (${info.latest})` : ""}.`) : "Checks GitHub for a newer Goblin."}
+            {info ? (info.available ? `Goblin ${info.latest} is out.` : info.pending ? `Goblin ${info.pending} is still being prepared for this computer. Check again in a few minutes.` : `You have the newest version.`) : "Checks GitHub for a newer Goblin."}
             {" "}Updates are checked against their published checksum before they're installed.
           </div>
           {error && <div className="error small">{error}</div>}
