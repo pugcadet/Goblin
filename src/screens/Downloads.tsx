@@ -219,10 +219,10 @@ function Advanced({ d, setD, onImport }: { d: D; setD: (p: Partial<D>) => void; 
       </div>
       <div className="advcard">
         <h4>Tools</h4>
-        {row("cookies.txt", <>
-          <span className={`dot ${ck?.loaded ? "on" : ""}`} /><span className="muted small grow-text">{ck?.loaded ? ck.name : "None loaded"}</span>
-          <button className="small-btn" onClick={() => void api.cookiesLoad().then(setCk).catch((e) => toast("Couldn't load it", errorText(e)))}>Load…</button>
-          {ck?.loaded && <button className="icon" title="Delete" onClick={() => void api.cookiesDelete().then(setCk)}>{I.trash}</button>}
+        {row("YouTube sign-in", <>
+          <span className={`dot ${ck?.loaded ? "on" : ""}`} /><span className="muted small grow-text">{ck?.loaded ? (ck.name === "YouTube sign-in" ? "Signed in" : ck.name) : "Not signed in"}</span>
+          {!ck?.loaded && <button className="small-btn" onClick={() => void api.youtubeSignIn().then(setCk).catch((e) => { const t = errorText(e); if (!/cancelled/i.test(t)) toast("Sign-in didn't finish", t); })}>{I.user} Sign in…</button>}
+          {ck?.loaded && <button className="small-btn" onClick={() => void api.cookiesDelete().then(setCk)}>Sign out</button>}
         </>, "Only used when YouTube says a video is age-restricted or members-only")}
         {row("Bulk", <>
           <button className="small-btn" onClick={onImport}>Import URLs</button>
