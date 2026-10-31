@@ -61,8 +61,20 @@ jobs:
       - name: Run Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml 2>&1 | tee -a ci.log
 
+      # macOS runners sometimes fail to make the .dmg ("resource busy" from hdiutil): the app is
+      # already built then, so only the disk image is tried again (up to twice).
       - name: Build installer
-        run: npx tauri build --bundles ${{ matrix.bundles }} ${{ matrix.target && format('--target {0}', matrix.target) || '' }} 2>&1 | tee -a ci.log
+        run: |
+          T="${{ matrix.target && format('--target {0}', matrix.target) || '' }}"
+          if npx tauri build --bundles ${{ matrix.bundles }} $T 2>&1 | tee -a ci.log; then exit 0; fi
+          [ "${{ matrix.label }}" = "mac" ] || exit 1
+          for i in 1 2; do
+            echo "dmg failed, retrying ($i)" | tee -a ci.log
+            hdiutil info | grep -E '^/dev/disk' | awk '{print $1}' | xargs -I{} hdiutil detach {} -force 2>/dev/null || true
+            sleep 20
+            if npx tauri build --bundles dmg $T 2>&1 | tee -a ci.log; then exit 0; fi
+          done
+          exit 1
 
       # One release per version (v1.1.0, ...), like Media Hub. The .app.tar.gz and the Windows
       # installer are what Goblin's in-app updater downloads, checked against the SHA256SUMS files.
