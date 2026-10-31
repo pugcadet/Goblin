@@ -82,32 +82,35 @@ export default function Search() {
   };
 
   const placeholder = { songs: "Song, artist or album, e.g. Linkin Park Numb", albums: "Album or artist, e.g. Meteora or Linkin Park", videos: "Search YouTube", podcasts: "Podcast name" }[mode];
-  const hint = { songs: "Click an album name to open the whole album", albums: "The albums behind the top YouTube Music songs, plus its album search", videos: "YouTube", podcasts: "Apple Podcasts directory (RSS feeds)" }[mode];
+  const hint = { songs: "Official audio from YouTube Music, with full tags.", albums: "Whole albums, matched with MusicBrainz.", videos: "Anything on YouTube.", podcasts: "The Apple Podcasts directory (RSS feeds)." }[mode];
 
   return (
-    <main className="page">
-      <section className="card form">
-        <div className="row search-row">
-          <input className="grow" value={q} autoFocus placeholder={placeholder} spellCheck={false} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void run()} />
-          <button className="primary" disabled={busy || !q.trim() || !st.info?.ytdlp} onClick={() => void run()}>{I.search} {busy ? "Searching…" : "Search"}</button>
-        </div>
-        <div className="row optrow">
-          <Seg value={mode} onChange={(m) => { setMode(m); setResults(null); if (q.trim()) void run(m); }}
-            options={[["songs", <>{I.music} Music</>], ["albums", <>{I.disc} Albums</>], ["videos", <>{I.film} Videos</>], ["podcasts", <>{I.mic} Podcasts</>]]} />
-          {mode === "albums" && <button className="small-btn" disabled={!q.trim()} onClick={() => setDisco(true)}>{I.user} Artist discography…</button>}
-          <div className="spacer" />
-          <span className="muted small">{hint}</span>
-        </div>
-      </section>
+    <main className={`page ${pick.size ? "with-tray" : ""}`}>
+      <header className="page-head">
+        <h1>Search</h1>
+        <span className="muted">{hint}</span>
+      </header>
+      <div className="searchbox">
+        <span className="searchbox-icon">{I.search}</span>
+        <input aria-label="Search" value={q} autoFocus placeholder={placeholder} spellCheck={false} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void run()} />
+        <button className="primary" disabled={busy || !q.trim() || !st.info?.ytdlp} onClick={() => void run()}>{busy ? "Searching…" : "Search"}</button>
+      </div>
+      <div className="tabs" role="tablist">
+        {([["songs", "Songs", I.music], ["albums", "Albums", I.disc], ["videos", "Videos", I.film], ["podcasts", "Podcasts", I.mic]] as [Mode, string, ReactNode][]).map(([m, l, ic]) => (
+          <button key={m} role="tab" aria-selected={mode === m} className={`tab ${mode === m ? "on" : ""}`} onClick={() => { setMode(m); setResults(null); setPick(new Set()); if (q.trim()) void run(m); }}>{ic} {l}</button>
+        ))}
+        <span className="tabs-sep" />
+        <button className="tab" disabled={!q.trim()} onClick={() => setDisco(true)} title="Every album by an artist">{I.user} Artist discography…</button>
+      </div>
 
       {busy && <p className="muted center-text">Searching…</p>}
       {!busy && results === null && (
-        <div className="empty-big"><b>Find anything</b><span className="muted">Songs and albums come back as official audio with full tags. Videos can be downloaded or subscribed to.</span></div>
+        <div className="empty-big"><span className="dicon">{I.search}</span><b>Find a song, album, video or podcast</b><span className="muted small">Tick what you want and download it all at once, or open an album to check every track first.</span></div>
       )}
       {!busy && results && !results.length && <p className="muted center-text">Nothing found.</p>}
       {!busy && results && results.length > 0 && (
         <>
-          {mode === "songs" && <Songs rows={results as SongRow[]} f={f} setF={setF} artist={artist} setArtist={setArtist} preset={preset} setPreset={setPreset} added={added} onGet={(r) => queue(r.url, preset, { titleHint: `${r.artist} – ${r.title}`, thumb: r.art, tags: r.tags })} onAlbum={(r) => setAlbum({ id: r.albumId, title: r.album, artist: r.artist.split(", ")[0], year: r.year, type: "Album", art: r.art })} />}
+          {mode === "songs" && <Songs rows={results as SongRow[]} f={f} setF={setF} artist={artist} setArtist={setArtist} preset={preset} setPreset={setPreset} added={added} pick={pick} setPick={setPick} onGet={(r) => queue(r.url, preset, { titleHint: `${r.artist} – ${r.title}`, thumb: r.art, tags: r.tags })} onAlbum={(r) => setAlbum({ id: r.albumId, title: r.album, artist: r.artist.split(", ")[0], year: r.year, type: "Album", art: r.art })} />}
           {mode === "albums" && <Albums rows={results as AlbumCard[]} f={f} setF={setF} artist={artist} setArtist={setArtist} pick={pick} setPick={setPick} preset={preset} setPreset={setPreset} onOpen={setAlbum} />}
           {mode === "videos" && <Videos rows={results as VideoRow[]} vPreset={vPreset} setVPreset={setVPreset} added={added} pick={pick} setPick={setPick} onGet={(r, p) => queue(r.url, p, { titleHint: r.title, thumb: r.art })} />}
           {mode === "podcasts" && <Podcasts rows={results as PodcastRow[]} />}
@@ -130,13 +133,14 @@ function FilterBar({ rows, f, setF, artist, setArtist, albums }: { rows: { artis
   if (artist && !top.some(([a]) => a === artist)) top = [[artist, counts.get(artist) ?? 0], ...top.slice(0, 5)];
   return (
     <div className="filterbar">
-      <label className="check small"><input type="checkbox" checked={f.hideJunk} onChange={(e) => setF({ ...f, hideJunk: e.target.checked })} /> Hide covers, karaoke & tributes</label>
-      <Select value={f.minPlays} options={[[0, "Any plays"], [1e5, "100K+ plays"], [1e6, "1M+ plays"], [1e7, "10M+ plays"], [1e8, "100M+ plays"]]} onChange={(v) => setF({ ...f, minPlays: v })} />
-      <Select value={f.sort} options={[["yt", "YouTube Music order"], ["plays", "Most played first"]]} onChange={(v) => setF({ ...f, sort: v })} />
-      {albums && <label className="check small"><input type="checkbox" checked={f.deluxe} onChange={(e) => setF({ ...f, deluxe: e.target.checked })} /> Prefer deluxe editions</label>}
-      {albums && <Seg value={f.type} onChange={(t) => setF({ ...f, type: t })} options={[["all", "All"], ["Album", "Albums"], ["other", "Singles & EPs"]]} />}
+      <button className={`chip ${f.hideJunk ? "on" : ""}`} aria-pressed={f.hideJunk} onClick={() => setF({ ...f, hideJunk: !f.hideJunk })}>{f.hideJunk && I.check} Hide covers & karaoke</button>
+      <Select className="small" value={f.minPlays} options={[[0, "Any plays"], [1e5, "100K+ plays"], [1e6, "1M+ plays"], [1e7, "10M+ plays"], [1e8, "100M+ plays"]]} onChange={(v) => setF({ ...f, minPlays: v })} />
+      <Select className="small" value={f.sort} options={[["yt", "YouTube Music order"], ["plays", "Most played first"]]} onChange={(v) => setF({ ...f, sort: v })} />
+      {albums && <button className={`chip ${f.deluxe ? "on" : ""}`} aria-pressed={f.deluxe} onClick={() => setF({ ...f, deluxe: !f.deluxe })}>{f.deluxe && I.check} Prefer deluxe editions</button>}
+      {albums && <Seg className="small" value={f.type} onChange={(t) => setF({ ...f, type: t })} options={[["all", "All"], ["Album", "Albums"], ["other", "Singles & EPs"]]} />}
       {(top.length > 1 || artist) && (
         <div className="chips">
+          <span className="tabs-sep" />
           <button className={`chip ${!artist ? "on" : ""}`} onClick={() => setArtist("")}>All artists</button>
           {top.map(([a, n]) => <button key={a} className={`chip ${artist === a ? "on" : ""}`} onClick={() => setArtist(a)}>{a} <span className="muted">{n}</span></button>)}
         </div>
@@ -162,40 +166,69 @@ function filtered<T extends { artist: string; junk?: boolean; plays?: number; ti
   return v;
 }
 
-function Songs({ rows, f, setF, artist, setArtist, preset, setPreset, added, onGet, onAlbum }: { rows: SongRow[]; f: Filters; setF: (f: Filters) => void; artist: string; setArtist: (a: string) => void; preset: string; setPreset: (p: string) => void; added: Set<string>; onGet: (r: SongRow) => void; onAlbum: (r: SongRow) => void }) {
+function Songs({ rows, f, setF, artist, setArtist, preset, setPreset, added, pick, setPick, onGet, onAlbum }: { rows: SongRow[]; f: Filters; setF: (f: Filters) => void; artist: string; setArtist: (a: string) => void; preset: string; setPreset: (p: string) => void; added: Set<string>; pick: Set<string>; setPick: (s: Set<string>) => void; onGet: (r: SongRow) => void; onAlbum: (r: SongRow) => void }) {
   const view = filtered(rows, f, artist, false);
+  const picked = view.filter((r) => pick.has(r.url));
+  const all = view.length > 0 && view.every((r) => pick.has(r.url));
+  const flip = (u: string) => { const n = new Set(pick); n.has(u) ? n.delete(u) : n.add(u); setPick(n); };
   return (
     <>
       <FilterBar rows={rows} f={f} setF={setF} artist={artist} setArtist={setArtist} />
       <section className="card list">
-        <div className="row list-head">
-          <span className="muted small">{view.length} of {rows.length}</span>
-          <div className="spacer" />
-          <span className="muted small">Download as</span>
-          <Select value={preset} options={musicPresets().map((p) => [p.id, p.name])} onChange={setPreset} />
+        <div className="song-row head">
+          <input type="checkbox" aria-label="Select all" checked={all} onChange={() => setPick(all ? new Set() : new Set(view.map((r) => r.url)))} />
+          <span />
+          <span className="muted small">{view.length} of {rows.length} songs</span>
+          <span className="muted small">Plays</span>
+          <span className="muted small">Length</span>
+          <span />
         </div>
-        {view.map((r) => (
-          <div className="hit" key={r.url}>
-            <Pic src={r.art} className="square" />
-            <div className="job-main">
-              <div className="job-title">{r.title}</div>
-              <div className="muted small job-text">
-                {r.artist}
-                {r.album && <> · {r.albumId ? <button className="link small" onClick={() => onAlbum(r)}>{I.disc} {r.album}</button> : r.album}</>}
-                {r.year && ` · ${r.year}`}
+        {view.map((r) => {
+          const inQ = added.has(r.url + preset);
+          return (
+            <div className={`song-row ${pick.has(r.url) ? "sel" : ""}`} key={r.url}>
+              <input type="checkbox" aria-label={`Select ${r.title}`} checked={pick.has(r.url)} onChange={() => flip(r.url)} />
+              <Pic src={r.art} className="square small" />
+              <div className="qmain">
+                <div className="job-title">{r.title}</div>
+                <div className="muted small job-text">
+                  {r.artist}
+                  {r.album && <> · {r.albumId ? <button className="link small" onClick={() => onAlbum(r)} title="Open the whole album">{r.album}</button> : r.album}</>}
+                  {r.year && ` · ${r.year}`}
+                </div>
+              </div>
+              <span className="muted small">{r.plays > 0 ? plays(r.plays) : ""}</span>
+              <span className="muted small mono">{r.dur}</span>
+              <div className="job-actions">
+                {r.albumId && <button className="icon" aria-label="Open album" title="Open the whole album" onClick={() => onAlbum(r)}>{I.disc}</button>}
+                <button className={`icon ${inQ ? "okmark" : ""}`} aria-label={inQ ? "In the queue" : "Download now"} title={inQ ? "In the queue" : "Download now"} disabled={inQ} onClick={() => onGet(r)}>{inQ ? I.check : I.down}</button>
               </div>
             </div>
-            {r.plays > 0 && <span className="muted small">{plays(r.plays)} plays</span>}
-            <span className="muted small mono">{r.dur}</span>
-            <div className="job-actions">
-              {r.albumId && <button className="small-btn" onClick={() => onAlbum(r)}>{I.disc} Album</button>}
-              <button className={`small-btn ${added.has(r.url + preset) ? "added" : "soft"}`} disabled={added.has(r.url + preset)} onClick={() => onGet(r)}>{added.has(r.url + preset) ? <>{I.check} In queue</> : <>{I.down} Download</>}</button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {!view.length && <p className="muted empty">Everything was filtered out. Loosen the filters above.</p>}
       </section>
+      <Tray n={picked.length} what="song" preset={preset} setPreset={setPreset} onClear={() => setPick(new Set())} onGo={() => { picked.forEach(onGet); setPick(new Set()); toast(`Queued ${picked.length} song${picked.length > 1 ? "s" : ""}`); }} />
     </>
+  );
+}
+
+/** The bar at the bottom while things are ticked: "3 songs selected · as Music → Download 3". */
+function Tray({ n, what, preset, setPreset, onClear, onGo, presets }: { n: number; what: string; preset: string; setPreset: (p: string) => void; onClear: () => void; onGo: () => void; presets?: [string, string][] }) {
+  const st = useStore();
+  if (!n) return null;
+  const p = store.preset(preset);
+  const dest = p.outputDir || st.dir(p.kind === "music" ? (p.podcast ? st.settings.dirPodcasts : st.settings.dirMusic) : p.metaMode === "youtube" ? st.settings.dirYoutube : st.settings.dirOther);
+  return (
+    <div className="tray" role="region" aria-label="Selection">
+      <b>{n} {what}{n > 1 ? "s" : ""} selected</b>
+      <button className="small-btn" onClick={onClear}>Clear</button>
+      <div className="spacer" />
+      <span className="muted small">as</span>
+      <Select value={preset} options={presets ?? musicPresets().map((x) => [x.id, x.name])} onChange={setPreset} />
+      <span className="muted small mono ell tray-dest" title={dest}>→ {tildify(dest, st.info?.home ?? "")}</span>
+      <button className="primary" onClick={onGo}>{I.down} Download {n}</button>
+    </div>
   );
 }
 
@@ -203,30 +236,38 @@ function BulkBar({ list, pick, setPick, preset, setPreset }: { list: AlbumCard[]
   const picked = list.filter((a) => pick.has(a.id));
   const all = list.length > 0 && list.every((a) => pick.has(a.id));
   return (
-    <div className="bulkbar">
-      <label className="check small"><input type="checkbox" checked={all} onChange={() => setPick(all ? new Set([...pick].filter((id) => !list.some((a) => a.id === id))) : new Set([...pick, ...list.map((a) => a.id)]))} /> Select all</label>
-      <span className="spacer" />
-      {picked.length > 0 && (
-        <>
-          <Select value={preset} options={musicPresets().map((p) => [p.id, p.name])} onChange={setPreset} />
-          <button className="primary" onClick={() => {
-            toast(`Queueing ${picked.length} album${picked.length > 1 ? "s" : ""}…`, "One after another, in the background");
-            void search.queueAlbums(picked, preset, (t, s) => toast(t, s));
-            setPick(new Set());
-          }}>{I.down} Download {picked.length} album{picked.length > 1 ? "s" : ""}</button>
-        </>
-      )}
-    </div>
+    <>
+      <div className="bulkbar">
+        <label className="check small"><input type="checkbox" checked={all} onChange={() => setPick(all ? new Set([...pick].filter((id) => !list.some((a) => a.id === id))) : new Set([...pick, ...list.map((a) => a.id)]))} /> Select all</label>
+        <span className="muted small">Hover a cover to get the whole album, or click it to check the tracks first.</span>
+      </div>
+      <Tray n={picked.length} what="album" preset={preset} setPreset={setPreset} onClear={() => setPick(new Set())} onGo={() => {
+        toast(`Queueing ${picked.length} album${picked.length > 1 ? "s" : ""}…`, "One after another, in the background");
+        void search.queueAlbums(picked, preset, (t, s) => toast(t, s));
+        setPick(new Set());
+      }} />
+    </>
   );
 }
 
-function AlbumGrid({ list, pick, setPick, onOpen }: { list: AlbumCard[]; pick: Set<string>; setPick: (s: Set<string>) => void; onOpen: (a: AlbumCard) => void }) {
+function AlbumGrid({ list, pick, setPick, onOpen, preset }: { list: AlbumCard[]; pick: Set<string>; setPick: (s: Set<string>) => void; onOpen: (a: AlbumCard) => void; preset?: string }) {
+  const [got, setGot] = useState<Set<string>>(new Set());
   return (
     <div className="agrid">
       {list.map((a) => (
         <div className={`acard ${pick.has(a.id) ? "picked" : ""}`} key={a.id} onClick={() => onOpen(a)}>
-          <label className="apick" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={pick.has(a.id)} onChange={() => { const n = new Set(pick); n.has(a.id) ? n.delete(a.id) : n.add(a.id); setPick(n); }} /></label>
-          <Pic src={a.art} className="cover" fallback={I.disc} />
+          <div className="acover">
+            <Pic src={a.art} className="cover" fallback={I.disc} />
+            <label className="apick" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${a.title}`} checked={pick.has(a.id)} onChange={() => { const n = new Set(pick); n.has(a.id) ? n.delete(a.id) : n.add(a.id); setPick(n); }} /></label>
+            {preset && (
+              <button className={`aget ${got.has(a.id) ? "done" : ""}`} disabled={got.has(a.id)} onClick={(e) => {
+                e.stopPropagation();
+                setGot((g) => new Set(g).add(a.id));
+                toast(`Getting “${a.title}”…`, "Matching the tracks, then queueing them");
+                void search.queueAlbums([a], preset, (t, s) => toast(t, s));
+              }}>{got.has(a.id) ? <>{I.check} Queued</> : <>{I.down} Get album</>}</button>
+            )}
+          </div>
           <b>{a.title}</b>
           {a.artist && <span className="muted small">{a.artist}</span>}
           <span className="muted small">{[a.year, a.type !== "Album" ? a.type : "", a.tracks ? `${a.tracks} song${a.tracks === 1 ? "" : "s"}` : "", a.plays ? `${plays(a.plays)} plays` : "", a.fans ? `${plays(a.fans)} fans` : ""].filter(Boolean).join(" · ")}</span>
@@ -242,7 +283,7 @@ function Albums({ rows, f, setF, artist, setArtist, pick, setPick, preset, setPr
     <>
       <FilterBar rows={rows} f={f} setF={setF} artist={artist} setArtist={setArtist} albums />
       <BulkBar list={view} pick={pick} setPick={setPick} preset={preset} setPreset={setPreset} />
-      {view.length ? <AlbumGrid list={view} pick={pick} setPick={setPick} onOpen={onOpen} /> : <p className="muted center-text">Everything was filtered out. Loosen the filters above.</p>}
+      {view.length ? <AlbumGrid list={view} pick={pick} setPick={setPick} onOpen={onOpen} preset={preset} /> : <p className="muted center-text">Everything was filtered out. Loosen the filters above.</p>}
     </>
   );
 }
@@ -258,9 +299,9 @@ function Videos({ rows, vPreset, setVPreset, added, pick, setPick, onGet }: { ro
         <label className="check small"><input type="checkbox" checked={rows.every((r) => pick.has(r.url))} onChange={(e) => setPick(e.target.checked ? new Set(rows.map((r) => r.url)) : new Set())} /> Select all</label>
         <span className="spacer" />
         <span className="muted small">Download as</span>
-        <Select value={vPreset} options={st.presets.map((p) => [p.id, `${p.kind === "music" ? "♪ " : ""}${p.name}`])} onChange={setVPreset} />
-        {picked.length > 0 && <button className="primary" onClick={() => { picked.forEach((r) => onGet(r, vPreset)); setPick(new Set()); toast(`Queued ${picked.length}`); }}>{I.down} Download {picked.length}</button>}
+        <Select className="small" value={vPreset} options={st.presets.map((p) => [p.id, `${p.kind === "music" ? "♪ " : ""}${p.name}`])} onChange={setVPreset} />
       </div>
+      <Tray n={picked.length} what="video" preset={vPreset} setPreset={setVPreset} presets={st.presets.map((p) => [p.id, `${p.kind === "music" ? "♪ " : ""}${p.name}`])} onClear={() => setPick(new Set())} onGo={() => { picked.forEach((r) => onGet(r, vPreset)); setPick(new Set()); toast(`Queued ${picked.length}`); }} />
       <div className="vgrid">
         {rows.map((r) => (
           <div className={`vcard ${pick.has(r.url) ? "picked" : ""}`} key={r.url}>
