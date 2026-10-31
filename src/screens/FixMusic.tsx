@@ -61,6 +61,7 @@ export default function FixMusic() {
   const ready = [...sel].filter((i) => files[i]?.candidate).length;
   return (
     <main className="page">
+      <header className="page-head"><h1>Fix music</h1><span className="muted">Repair tags, covers and names, or find the tracks an album is missing.</span></header>
       <section className="card dropcard">
         <div className="dicon">{I.music}</div>
         <div className="grow-text">

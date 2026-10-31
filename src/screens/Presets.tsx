@@ -66,7 +66,9 @@ export default function Presets() {
   const set = (patch: Partial<Preset>) => void store.savePreset({ ...p, ...patch });
   const fields = [...(p.kind === "music" ? MUSIC : VIDEO), ...TAIL];
   return (
-    <main className="page split">
+    <main className="page">
+      <header className="page-head"><h1>Presets</h1><span className="muted">Ready-made recipes for the Download screen. Changes save right away.</span></header>
+      <div className="split-row">
       <aside className="card side">
         {st.presets.map((x) => (
           <button key={x.id} className={`side-item ${x.id === p.id ? "on" : ""}`} onClick={() => setId(x.id)}>
@@ -104,6 +106,7 @@ export default function Presets() {
         })}
         <p className="muted small">Changes are saved right away. Per-download changes (Downloads → the bar under the links) don't change the preset.</p>
       </section>
+      </div>
     </main>
   );
 }

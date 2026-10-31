@@ -15,7 +15,7 @@ import Search from "./screens/Search";
 import Subscriptions from "./screens/Subscriptions";
 import FixMusic from "./screens/FixMusic";
 import Presets from "./screens/Presets";
-import Settings from "./screens/Settings";
+import Settings, { settingsPage } from "./screens/Settings";
 
 type View = "downloads" | "search" | "subs" | "fix" | "presets" | "settings";
 const NAV_MAIN: [View, string, keyof typeof I][] = [["downloads", "Download", "down"], ["search", "Search", "search"], ["subs", "Subscriptions", "bell"]];
@@ -157,10 +157,10 @@ export default function App() {
         {item("presets", "Presets", "sliders")}
         {item("settings", "Settings", "gear")}
         <div className="status-box">
-          <button className="status-line" onClick={() => setView("settings")} title="Settings → YouTube account">
+          <button className="status-line" onClick={() => { settingsPage("account"); setView("settings"); }} title="Settings → YouTube account">
             <span className={`dot ${st.info?.cookiesFile ? "on" : ""}`} />{st.info?.cookiesFile ? "YouTube: signed in" : "YouTube: not signed in"}
           </button>
-          <button className="status-line" onClick={() => setView("settings")} title={tool?.version ? `yt-dlp ${tool.version}` : undefined}>
+          <button className="status-line" onClick={() => { settingsPage("advanced"); setView("settings"); }} title={tool?.version ? `yt-dlp ${tool.version}` : undefined}>
             <span className={`dot ${tool?.version && !updating ? "on" : updating ? "busy" : "bad"}`} />{updating ? "Updating yt-dlp…" : tool?.version ? `yt-dlp ${tool.version}` : "yt-dlp missing"}
           </button>
           {overall != null && <div className="status-progress" title="All downloads"><div className="progress"><span style={{ width: `${Math.round(overall * 100)}%` }} /></div></div>}
@@ -175,7 +175,7 @@ export default function App() {
         </div>
       )}
       {tool && !tool.ffmpeg && <div className="notice bad"><span>ffmpeg is missing, so video and sound can't be joined. Reinstall Goblin to get it back.</span></div>}
-      {st.info && !st.info.library && <div className="notice"><span>Choose where Goblin saves everything.</span><button className="link" onClick={() => setView("settings")}>Settings → Folders</button></div>}
+      {st.info && !st.info.library && <div className="notice"><span>Choose where Goblin saves everything.</span><button className="link" onClick={() => { settingsPage("folders"); setView("settings"); }}>Settings → Folders</button></div>}
       {view === "downloads" && <Downloads />}
       {view === "search" && <Search />}
       {view === "subs" && <Subscriptions />}
