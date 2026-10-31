@@ -1,5 +1,5 @@
 
-added 73 packages in 6s
+added 73 packages in 7s
 → deno (aarch64-apple-darwin)
   ↓ https://github.com/denoland/deno/releases/latest/download/deno-aarch64-apple-darwin.zip
   ↓ https://github.com/denoland/deno/releases/latest/download/deno-aarch64-apple-darwin.zip.sha256sum
@@ -9,11 +9,11 @@ added 73 packages in 6s
   ↓ https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/release/ffprobe.zip
 ✓ Downloaded (not started: SKIP_RUN=1)
 total 417984
-drwxr-xr-x   5 runner  staff       160 Oct 31 19:06 .
-drwxr-xr-x  11 runner  staff       352 Oct 31 19:06 ..
--rwxr-xr-x   1 runner  staff  81512928 Oct 31 19:06 deno-aarch64-apple-darwin
--rwxr-xr-x   1 runner  staff  66332880 Oct 31 19:06 ffmpeg-aarch64-apple-darwin
--rwxr-xr-x   1 runner  staff  66158064 Oct 31 19:06 ffprobe-aarch64-apple-darwin
+drwxr-xr-x   5 runner  staff       160 Oct 31 19:17 .
+drwxr-xr-x  11 runner  staff       352 Oct 31 19:16 ..
+-rwxr-xr-x   1 runner  staff  81512928 Oct 31 19:17 deno-aarch64-apple-darwin
+-rwxr-xr-x   1 runner  staff  66332880 Oct 31 19:17 ffmpeg-aarch64-apple-darwin
+-rwxr-xr-x   1 runner  staff  66158064 Oct 31 19:17 ffprobe-aarch64-apple-darwin
 [1m[92m    Updating[0m crates.io index
 [1m[92m     Locking[0m 49 packages to highest compatible versions
 [1m[92m      Adding[0m async-broadcast v0.7.2
@@ -66,15 +66,15 @@ drwxr-xr-x  11 runner  staff       352 Oct 31 19:06 ..
 [1m[92m      Adding[0m zvariant_derive v5.15.1
 [1m[92m      Adding[0m zvariant_utils v4.2.0
 [1m[92m   Compiling[0m goblin v1.4.0 (/Users/runner/work/Goblin/Goblin/src-tauri)
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 58.59s
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 47.63s
 [1m[92m     Running[0m unittests src/lib.rs (src-tauri/target/debug/deps/goblin_lib-6245fc6b8f7d3fa0)
 
 running 24 tests
 test config::tests::unknown_or_missing_fields_are_fine ... ok
-test downloads::tests::audio_mode ... ok
 test downloads::tests::builds_safe_arguments ... ok
-test downloads::tests::plain_error_text ... ok
+test downloads::tests::audio_mode ... ok
 test downloads::tests::helper_programs_and_cookies ... ok
+test downloads::tests::plain_error_text ... ok
 test downloads::tests::reads_progress_and_checksums ... ok
 test downloads::tests::rejects_non_web_addresses ... ok
 test config::tests::saves_and_loads ... ok
@@ -86,8 +86,8 @@ test host::tests::lyrics_frame ... ok
 test host::tests::paths_never_climb_out ... ok
 test host::tests::only_known_websites ... ok
 test host::tests::refuses_dangerous_ytdlp_options ... ok
-test host::tests::store_names ... ok
 test host::tests::sign_in_keeps_youtube_cookies_only ... ok
+test host::tests::store_names ... ok
 test naming::tests::cleans_names ... ok
 test updater::tests::checksums_and_assets ... ok
 test updater::tests::picks_newest_release_ready_for_this_computer ... ok
@@ -145,9 +145,9 @@ computing gzip size...
 [2mdist/[22m[2massets/[22m[32minter-latin-ext-wght-normal-DO1Apj_S.woff2          [39m[1m[2m 85.07 kB[22m[1m[22m
 [2mdist/[22m[2massets/[22m[35mindex-MZmNSOQ9.css                                  [39m[1m[2m 43.71 kB[22m[1m[22m[2m │ gzip:  15.09 kB[22m
 [2mdist/[22m[2massets/[22m[36mindex-D0cKwpak.js                                   [39m[1m[2m370.72 kB[22m[1m[22m[2m │ gzip: 117.50 kB[22m
-[32m✓ built in 2.72s[39m
+[32m✓ built in 1.84s[39m
 [1m[92m   Compiling[0m goblin v1.4.0 (/Users/runner/work/Goblin/Goblin/src-tauri)
-[1m[92m    Finished[0m `release` profile [optimized] target(s) in 6m 09s
+[1m[92m    Finished[0m `release` profile [optimized] target(s) in 4m 18s
        Built application at: /Users/runner/work/Goblin/Goblin/src-tauri/target/aarch64-apple-darwin/release/goblin
     Bundling Goblin.app (/Users/runner/work/Goblin/Goblin/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Goblin.app)
      Signing with identity "-"
@@ -173,3 +173,4 @@ Signing /Users/runner/work/Goblin/Goblin/src-tauri/target/aarch64-apple-darwin/r
         /Users/runner/work/Goblin/Goblin/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Goblin.app (212.51 MiB)
         /Users/runner/work/Goblin/Goblin/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/Goblin_1.4.0_aarch64.dmg (95.76 MiB)
 
+https://github.com/pugcadet/Goblin/releases/tag/v1.4.0
