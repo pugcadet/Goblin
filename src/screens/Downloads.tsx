@@ -5,9 +5,10 @@ import { preview, PreviewRow, recommend } from "../engine/fix";
 import { host } from "../engine/host";
 import { jobs } from "../engine/jobs";
 import { Candidate, EXTRA_DEFAULTS, JobInfo, Options, Preset } from "../engine/model";
+import { dirname } from "../engine/host";
 import { store } from "../engine/store";
 import { subs } from "../engine/subs";
-import { I, Modal, Pic, Seg, Select, Switch, tildify, toast, useJobs, useStore } from "../ui";
+import { ago, I, Modal, Pic, Seg, Switch, tildify, toast, useJobs, useStore } from "../ui";
 
 export const OPTS = {
   quality: [["best", "Best"], ["2160", "2160p · 4K"], ["1440", "1440p"], ["1080", "1080p"], ["720", "720p"], ["480", "480p"], ["360", "360p"]] as [string, string][],
@@ -20,7 +21,7 @@ export const OPTS = {
 };
 
 /** Preset fields the add bar can change for one download; anything changed makes it "Custom". */
-const DKEYS = ["kind", "quality", "container", "codec", "audioFormat", "audioQuality", "musicbrainz", "sponsorBlock", "splitChapters", "ytdlpArgs"] as const;
+const DKEYS = ["kind", "quality", "container", "codec", "subtitles", "embedChapters", "audioFormat", "audioQuality", "musicbrainz", "lyrics", "sponsorBlock", "splitChapters", "ytdlpArgs"] as const;
 
 type D = Options & { presetId: string };
 
@@ -51,13 +52,35 @@ function options(d: D): Options {
 
 let lastD: D | null = null;
 
+/** How many of the per-download choices differ from the preset. */
+const changes = (d: D) => {
+  const p = store.preset(d.presetId);
+  return DKEYS.filter((k) => String((d as Record<string, unknown>)[k] ?? "") !== String(p[k] ?? "")).length;
+};
+
+/** "1080p · MKV · subtitles" / "MP3 320 · tags + cover" for the recipe button. */
+function summary(d: D): string {
+  const name = store.preset(d.presetId).name.toLowerCase();
+  return parts(d).filter((t) => !name.includes(t.toLowerCase())).join(" · ");
+}
+
+function parts(d: D): string[] {
+  const kind = d.kind ?? "video";
+  if (kind === "music") {
+    const f = String(d.audioFormat ?? "mp3").toUpperCase();
+    return [d.audioFormat === "mp3" ? `${f} ${d.audioQuality}` : f, d.musicbrainz && "tags + cover", d.lyrics && "lyrics"].filter(Boolean) as string[];
+  }
+  const q = d.quality === "best" ? "Best" : d.quality === "2160" ? "4K" : `${d.quality}p`;
+  return [q, d.container !== "any" && String(d.container).toUpperCase(), d.codec !== "any" && OPTS.codec.find((c) => c[0] === d.codec)?.[1], d.subtitles && "subtitles", d.sponsorBlock && "no sponsors"].filter(Boolean) as string[];
+}
+
 export default function Downloads() {
   const st = useStore();
   const list = useJobs();
   const [d, setDState] = useState<D>(() => lastD && st.presets.some((p) => p.id === lastD!.presetId) ? lastD : seed(st.settings.defaultPresetId));
   const setD = (patch: Partial<D>) => setDState((x) => (lastD = { ...x, ...patch }));
   const [text, setText] = useState("");
-  const [adv, setAdv] = useState(false);
+  const [panel, setPanel] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pv, setPv] = useState<PreviewRow[] | null>(null);
   const [showLog, setShowLog] = useState<string | null>(null);
@@ -66,15 +89,16 @@ export default function Downloads() {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const det = lines.length && st.settings.autoDetect !== "off" ? recommend(lines) : null;
   const toolsReady = !!st.info?.ytdlp;
+  const kind = d.kind ?? p.kind;
 
   // Auto-detect "apply": switch the preset as soon as the links say so.
   useEffect(() => {
     if (det && st.settings.autoDetect === "apply" && det.presetId && det.presetId !== d.presetId) setDState((lastD = seed(det.presetId)));
   }, [det?.presetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function go(kind: "download" | "subscribe" | "preview") {
+  async function go(what: "download" | "subscribe" | "preview") {
     if (!lines.length) return;
-    if (kind === "preview" || (kind === "download" && st.settings.previewBeforeDownload)) {
+    if (what === "preview" || (what === "download" && st.settings.previewBeforeDownload)) {
       setPv([]);
       try {
         setPv(await preview(text, options(d)));
@@ -86,7 +110,7 @@ export default function Downloads() {
     }
     setBusy(true);
     try {
-      if (kind === "subscribe") {
+      if (what === "subscribe") {
         const added = await subs.add(text, options(d));
         toast(added.length ? `Subscribed to ${added.length}` : "Already subscribed", added.map((s) => s.name).join(", "));
       } else {
@@ -102,18 +126,26 @@ export default function Downloads() {
   }
 
   const home = st.info?.home ?? "";
-  const dest = d.folder || p.outputDir || st.dir(p.kind === "music" ? (p.podcast ? st.settings.dirPodcasts : st.settings.dirMusic) : p.metaMode === "youtube" ? st.settings.dirYoutube : st.settings.dirOther);
+  const dest = d.folder || p.outputDir || st.dir(kind === "music" ? (p.podcast ? st.settings.dirPodcasts : st.settings.dirMusic) : p.metaMode === "youtube" ? st.settings.dirYoutube : st.settings.dirOther);
+  const destTail = kind === "music" ? (p.albumFolders && !p.podcast ? "/{artist}/{album}" : "") : p.metaMode === "youtube" && !d.folder && !p.outputDir ? "/{channel}" : "";
+  const n = changes(d);
 
   return (
     <main className="page">
-      <section className="card form addbar">
+      <header className="page-head">
+        <h1>Download</h1>
+        <span className="muted">Paste links, one per line, or type “Artist - Song”.</span>
+      </header>
+
+      <section className="card addbar" aria-label="Add downloads">
         <textarea
           className="links"
+          aria-label="Links"
           rows={Math.min(8, Math.max(2, lines.length + 1))}
           value={text}
           spellCheck={false}
           autoFocus
-          placeholder={"Paste links, one per line, or type “Artist - Song”…"}
+          placeholder={"https://www.youtube.com/watch?v=…"}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -124,48 +156,38 @@ export default function Downloads() {
         />
         {det && (
           <div className="detect">
-            <span className="chip static">{I.wand} {lines.length} item{lines.length > 1 ? "s" : ""}: {det.summary}</span>
-            {det.presetId && det.presetId !== d.presetId && st.settings.autoDetect === "suggest" ? (
+            <span className="tag ok">{I.check} {lines.length} item{lines.length > 1 ? "s" : ""}: {det.summary}</span>
+            {det.presetId && det.presetId !== d.presetId && st.settings.autoDetect === "suggest" && (
               <>
-                <span className="muted small">Looks like {det.why} →</span>
-                <button className="soft small-btn" onClick={() => setDState((lastD = seed(det.presetId!)))}>Use “{store.preset(det.presetId).name}”</button>
+                <span className="muted small">Looks like {det.why}.</span>
+                <button className="small-btn soft" onClick={() => setDState((lastD = { ...seed(det.presetId!), folder: d.folder }))}>Use “{store.preset(det.presetId).name}”</button>
               </>
-            ) : det.presetId ? <span className="muted small">{I.check} {p.name}</span> : null}
+            )}
             {det.subHint && <button className="small-btn" onClick={() => void go("subscribe")}>{I.bell} Subscribe instead</button>}
           </div>
         )}
-        <div className="row optrow">
-          <Select value={d.presetId} title="Preset" options={st.presets.map((x) => [x.id, x.name])} onChange={(id) => setDState((lastD = seed(id)))} />
-          <Seg value={d.kind ?? p.kind} onChange={(k) => setD({ kind: k })} options={[["video", <>{I.film} Video</>], ["music", <>{I.music} Audio</>]]} />
-          {(d.kind ?? p.kind) === "music" ? (
-            <>
-              <Select value={d.audioFormat ?? p.audioFormat} options={OPTS.audioFormat} onChange={(v) => setD({ audioFormat: v })} title="Format" />
-              {["mp3"].includes(d.audioFormat ?? p.audioFormat) && <Select value={d.audioQuality ?? p.audioQuality} options={OPTS.audioQuality} onChange={(v) => setD({ audioQuality: v })} title="Quality" />}
-              <button className={`small-btn ${d.musicbrainz ? "soft" : ""}`} onClick={() => setD({ musicbrainz: !d.musicbrainz })} title="Tags and cover art from MusicBrainz, written into the file">{I.music} Tags + cover</button>
-            </>
-          ) : (
-            <>
-              <Select value={d.quality ?? p.quality} options={OPTS.quality} onChange={(v) => setD({ quality: v })} title="Max quality" />
-              <Select value={d.container ?? p.container} options={OPTS.container} onChange={(v) => setD({ container: v })} title="Format" />
-              <Select value={d.codec ?? p.codec} options={OPTS.codec} onChange={(v) => setD({ codec: v })} title="Video codec" />
-            </>
-          )}
-          {isCustom(d) && <span className="custom-tag">Custom <button className="link small" onClick={() => setDState((lastD = { ...seed(d.presetId), folder: d.folder }))}>reset</button></span>}
-          <div className="spacer" />
-          <button className={`small-btn ${adv ? "soft" : ""}`} onClick={() => setAdv(!adv)}>{I.sliders} Advanced</button>
-        </div>
-        {adv && <Advanced d={d} setD={setD} onImport={() => setImporting(true)} />}
-        <div className="row optrow">
-          <button className="chip static dest" title="Where this download is saved. Click to choose another folder for it." onClick={async () => {
+        <div className="recipe">
+          <div className="recipe-anchor">
+            <button className={`recipe-btn ${panel ? "open" : ""}`} aria-expanded={panel} aria-haspopup="dialog" onClick={() => setPanel(!panel)} title="Preset and options for this download">
+              <span className="recipe-icon">{kind === "music" ? (p.podcast ? I.mic : I.music) : I.film}</span>
+              <b>{p.name}</b>
+              <span className="muted ell">{summary(d)}</span>
+              {n > 0 && <span className="tag warn">{n} change{n > 1 ? "s" : ""}</span>}
+              {I.chevron}
+            </button>
+            {panel && <RecipePanel d={d} setD={setD} setDState={(x) => setDState((lastD = x))} onClose={() => setPanel(false)} onImport={() => { setPanel(false); setImporting(true); }} />}
+          </div>
+          <span className="muted" aria-hidden="true">→</span>
+          <button className="recipe-btn dest" title="Where this download is saved. Click to choose another folder for it." onClick={async () => {
             const [f] = await api.pickPaths("folder").catch(() => [] as string[]);
             if (f) setD({ folder: f });
-          }}>{I.folder} {tildify(dest, home)}</button>
-          {d.folder && <button className="icon" title="Back to the library folder" onClick={() => setD({ folder: "" })}>{I.x}</button>}
+          }}>
+            <span className="recipe-icon">{I.folder}</span><span className="mono ell">{tildify(dest, home)}{destTail}</span>
+          </button>
+          {d.folder && <button className="icon" title="Back to the normal folder" onClick={() => setD({ folder: "" })}>{I.x}</button>}
           <div className="spacer" />
-          <span className="muted small">{isMac ? "⌘" : "Ctrl"}+Enter</span>
-          <button className="small-btn" disabled={!lines.length || !toolsReady} onClick={() => void go("preview")} title="Qualities, size, subtitles and chapters before downloading">{I.eye} Preview</button>
-          <button className="small-btn" disabled={!lines.length || busy} onClick={() => void go("subscribe")} title="Check this channel, playlist or podcast for new uploads while Goblin is open">{I.bell} Subscribe</button>
-          <button className="primary" disabled={!lines.length || busy || !toolsReady} onClick={() => void go("download")}>{I.down} Download</button>
+          <button className="small-btn tall" disabled={!lines.length || !toolsReady} onClick={() => void go("preview")} title="Qualities, size, subtitles and chapters before downloading">{I.eye} Preview</button>
+          <button className="primary" disabled={!lines.length || busy || !toolsReady} onClick={() => void go("download")}>{I.down} Download <span className="kbd">{isMac ? "⌘↵" : "Ctrl+↵"}</span></button>
         </div>
       </section>
 
@@ -185,53 +207,98 @@ export default function Downloads() {
   );
 }
 
-function Advanced({ d, setD, onImport }: { d: D; setD: (p: Partial<D>) => void; onImport: () => void }) {
+/** The popover behind the recipe button: pick a preset, then change things for this download only. */
+function RecipePanel({ d, setD, setDState, onClose, onImport }: { d: D; setD: (p: Partial<D>) => void; setDState: (d: D) => void; onClose: () => void; onImport: () => void }) {
   const st = useStore();
-  const [ck, setCk] = useState<{ loaded: boolean; name: string } | null>(null);
-  useEffect(() => void api.cookiesInfo().then(setCk).catch(() => undefined), []);
-  const row = (label: string, ctl: ReactNode, title?: string) => <div className="arow"><label title={title}>{label}</label><div className="ctl">{ctl}</div></div>;
-  const kind = d.kind ?? store.preset(d.presetId).kind;
+  const ref = useRef<HTMLDivElement>(null);
+  const p = store.preset(d.presetId);
+  const kind = d.kind ?? p.kind;
+  const n = changes(d);
+  useEffect(() => {
+    const down = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (ref.current && !ref.current.contains(t) && !(t as Element).closest?.(".recipe-btn")) onClose();
+    };
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("mousedown", down);
+    window.addEventListener("keydown", key);
+    return () => { document.removeEventListener("mousedown", down); window.removeEventListener("keydown", key); };
+  }, [onClose]);
+  const icon = (x: Preset) => (x.kind === "music" ? (x.podcast ? I.mic : I.music) : x.metaMode === "none" ? I.star : I.film);
+  const hint = (x: Preset) => (x.kind === "music" ? [formatShort(x), x.musicbrainz && "tags + cover", x.lyrics && "lyrics", x.podcast && "chapters"] : [formatShort(x), x.metaMode === "youtube" ? "channel folders" : "original title", x.subtitles && "subtitles"]).filter(Boolean).join(" · ");
+  const row = (label: string, ctl: ReactNode, title?: string) => <div className="field"><span className="field-label" title={title}>{label}</span><div className="field-ctl">{ctl}</div></div>;
   return (
-    <div className="adv">
-      <div className="advcard">
-        <h4>Output</h4>
-        {row("Name prefix", <input value={d.prefix ?? ""} placeholder="e.g. [Live] " onChange={(e) => setD({ prefix: e.target.value })} />, "Added in front of the file name")}
-        {row("Remove sponsor segments", <Switch checked={!!d.sponsorBlock} onChange={(v) => setD({ sponsorBlock: v })} />, "SponsorBlock")}
-        {row("Split by chapters", <>
-          <Switch checked={!!d.splitChapters} onChange={(v) => setD({ splitChapters: v })} />
-          {d.splitChapters && kind === "video" && <input className="mono" value={d.chapterTemplate || "%(section_number)02d - %(section_title)s.%(ext)s"} onChange={(e) => setD({ chapterTemplate: e.target.value })} />}
-        </>, kind === "music" ? "Turns a full-album upload into separate tracks" : "One file per chapter")}
-        {row("Clip", <><input className="time" value={d.clipStart ?? ""} placeholder="start 0:00" onChange={(e) => setD({ clipStart: e.target.value })} /> → <input className="time" value={d.clipEnd ?? ""} placeholder="end" onChange={(e) => setD({ clipEnd: e.target.value })} /></>, "Only download this part")}
+    <div className="popover recipe-panel" role="dialog" aria-label="Download options" ref={ref}>
+      <div className="pop-sect">
+        <div className="pop-title">Preset</div>
+        {st.presets.map((x) => (
+          <button key={x.id} className={`preset-opt ${x.id === d.presetId ? "on" : ""}`} onClick={() => setDState({ ...seed(x.id), folder: d.folder })}>
+            <span className="recipe-icon">{icon(x)}</span>{x.name}<span className="muted small ell">{hint(x)}</span>
+          </button>
+        ))}
       </div>
-      <div className="advcard">
-        <h4>Behavior</h4>
-        {row("Start right away", <Switch checked={d.autoStart !== false} onChange={(v) => setD({ autoStart: v })} />, "Off: downloads wait as “pending” until you press Start")}
-        {row("Playlist items limit", <><input type="number" min={0} className="num" value={d.itemsLimit ?? 0} onChange={(e) => setD({ itemsLimit: Number(e.target.value) || 0 })} /><span className="muted small">0 = all</span></>)}
-        {row("Subscription check", <><input type="number" min={5} className="num" value={d.subInterval ?? st.settings.subInterval} onChange={(e) => setD({ subInterval: Number(e.target.value) || 60 })} /><span className="muted small">minutes</span></>)}
-        {row("Subscription title filter", <input className="mono" value={d.subFilter ?? ""} placeholder="e.g. (?i)official" onChange={(e) => setD({ subFilter: e.target.value })} />)}
-        {row("Skip members-only", <Switch checked={d.skipMembers !== false} onChange={(v) => setD({ skipMembers: v })} />)}
+      <div className="pop-sect">
+        <div className="pop-title row tight">
+          Just for this download<div className="spacer" />{n > 0 && <span className="tag warn">{n} change{n > 1 ? "s" : ""}</span>}
+        </div>
+        {row("Get", <Seg value={kind} onChange={(k) => setD({ kind: k })} options={[["video", <>{I.film} Video</>], ["music", <>{I.music} Audio</>]]} />)}
+        {kind === "music" ? (
+          <>
+            {row("Format", <Seg value={String(d.audioFormat)} onChange={(v) => setD({ audioFormat: v })} options={OPTS.audioFormat} />)}
+            {d.audioFormat === "mp3" && row("Quality", <Seg value={String(d.audioQuality)} onChange={(v) => setD({ audioQuality: v })} options={OPTS.audioQuality.map(([k, l]) => [k, l.replace(" kbps", "")])} />)}
+            <label className="check"><Switch checked={!!d.musicbrainz} onChange={(v) => setD({ musicbrainz: v })} /> Tags + cover art (MusicBrainz)</label>
+            <label className="check"><Switch checked={!!d.lyrics} onChange={(v) => setD({ lyrics: v })} /> Synced lyrics</label>
+            <label className="check"><Switch checked={!!d.splitChapters} onChange={(v) => setD({ splitChapters: v })} /> Split by chapters (full-album uploads)</label>
+          </>
+        ) : (
+          <>
+            {row("Quality", <Seg value={String(d.quality)} onChange={(v) => setD({ quality: v })} options={[["best", "Best"], ["2160", "4K"], ["1440", "1440"], ["1080", "1080"], ["720", "720"], ["480", "480"]]} />)}
+            {row("Format", <Seg value={String(d.container)} onChange={(v) => setD({ container: v })} options={[["any", "Any"], ["mkv", "MKV"], ["mp4", "MP4"], ["webm", "WebM"]]} />)}
+            {row("Codec", <Seg value={String(d.codec)} onChange={(v) => setD({ codec: v })} options={[["any", "Any"], ["h264", "H.264"], ["h265", "H.265"], ["av1", "AV1"], ["vp9", "VP9"]]} />, "H.264 plays on nearly every TV without transcoding")}
+            <label className="check"><Switch checked={!!d.subtitles} onChange={(v) => setD({ subtitles: v })} /> Subtitles (embedded)</label>
+            <label className="check"><Switch checked={!!d.embedChapters} onChange={(v) => setD({ embedChapters: v })} /> Chapters</label>
+            <label className="check"><Switch checked={!!d.sponsorBlock} onChange={(v) => setD({ sponsorBlock: v })} /> Cut sponsor segments</label>
+            <label className="check"><Switch checked={!!d.splitChapters} onChange={(v) => setD({ splitChapters: v })} /> One file per chapter</label>
+          </>
+        )}
       </div>
-      <div className="advcard">
-        <h4>yt-dlp</h4>
-        {row("Video password", <input type="password" autoComplete="off" value={d.password ?? ""} onChange={(e) => setD({ password: e.target.value })} />)}
-        {row("Extra options", <input className="mono" value={d.ytdlpArgs ?? ""} placeholder="--embed-info-json" onChange={(e) => setD({ ytdlpArgs: e.target.value })} />, "Command-line options added to this download")}
-        <div className="muted small">Options that run programs or read other files are refused.</div>
-      </div>
-      <div className="advcard">
-        <h4>Tools</h4>
-        {row("YouTube sign-in", <>
-          <span className={`dot ${ck?.loaded ? "on" : ""}`} /><span className="muted small grow-text">{ck?.loaded ? (ck.name === "YouTube sign-in" ? "Signed in" : ck.name) : "Not signed in"}</span>
-          {!ck?.loaded && <button className="small-btn" onClick={() => void api.youtubeSignIn().then(setCk).catch((e) => { const t = errorText(e); if (!/cancelled/i.test(t)) toast("Sign-in didn't finish", t); })}>{I.user} Sign in…</button>}
-          {ck?.loaded && <button className="small-btn" onClick={() => void api.cookiesDelete().then(setCk)}>Sign out</button>}
-        </>, "Only used when YouTube says a video is age-restricted or members-only")}
-        {row("Bulk", <>
-          <button className="small-btn" onClick={onImport}>Import URLs</button>
-          <button className="small-btn" onClick={() => { void navigator.clipboard.writeText(jobs.exportURLs()); toast("Copied every link in the list"); }}>{I.copy} Copy URLs</button>
-        </>)}
+      <details className="pop-sect more-opts">
+        <summary>More: clip, name prefix, playlist limit, password, extra yt-dlp options</summary>
+        <div className="more-body">
+          {row("Clip", <><input className="time" value={d.clipStart ?? ""} placeholder="start 0:00" onChange={(e) => setD({ clipStart: e.target.value })} /><span className="muted">→</span><input className="time" value={d.clipEnd ?? ""} placeholder="end" onChange={(e) => setD({ clipEnd: e.target.value })} /></>, "Only download this part")}
+          {row("Name prefix", <input value={d.prefix ?? ""} placeholder="e.g. [Live] " onChange={(e) => setD({ prefix: e.target.value })} />, "Added in front of the file name")}
+          {d.splitChapters && kind === "video" && row("Chapter names", <input className="mono" value={d.chapterTemplate || "%(section_number)02d - %(section_title)s.%(ext)s"} onChange={(e) => setD({ chapterTemplate: e.target.value })} />)}
+          {row("Playlist limit", <><input type="number" min={0} className="num" value={d.itemsLimit ?? 0} onChange={(e) => setD({ itemsLimit: Number(e.target.value) || 0 })} /><span className="muted small">items, 0 = all</span></>)}
+          {row("Start right away", <Switch checked={d.autoStart !== false} onChange={(v) => setD({ autoStart: v })} />, "Off: downloads wait in the queue until you press Start")}
+          {row("Video password", <input type="password" autoComplete="off" value={d.password ?? ""} onChange={(e) => setD({ password: e.target.value })} />)}
+          {row("yt-dlp options", <input className="mono" value={d.ytdlpArgs ?? ""} placeholder="--embed-info-json" onChange={(e) => setD({ ytdlpArgs: e.target.value })} />, "Options that run programs or read other files are refused")}
+          <div className="pop-title">When subscribing from here</div>
+          {row("Check every", <><input type="number" min={5} className="num" value={d.subInterval ?? st.settings.subInterval} onChange={(e) => setD({ subInterval: Number(e.target.value) || 60 })} /><span className="muted small">minutes</span></>)}
+          {row("Title filter", <input className="mono" value={d.subFilter ?? ""} placeholder="e.g. (?i)official" onChange={(e) => setD({ subFilter: e.target.value })} />)}
+          {row("Skip members-only", <Switch checked={d.skipMembers !== false} onChange={(v) => setD({ skipMembers: v })} />)}
+          <div className="row tight">
+            <button className="small-btn" onClick={onImport}>Import a list of links…</button>
+            <button className="small-btn" onClick={() => { void navigator.clipboard.writeText(jobs.exportURLs()); toast("Copied every link in the list"); }}>{I.copy} Copy all links</button>
+          </div>
+        </div>
+      </details>
+      <div className="pop-foot">
+        <button className="small-btn" disabled={!n} onClick={() => setDState({ ...seed(d.presetId), folder: d.folder })}>Reset to preset</button>
+        <div className="spacer" />
+        <button className="small-btn" disabled={!n} onClick={async () => {
+          const patch: Partial<Preset> = {};
+          for (const k of DKEYS) (patch as Record<string, unknown>)[k] = (d as Record<string, unknown>)[k];
+          const saved = await store.savePreset({ ...p, ...patch, id: "", name: `${p.name} (${parts(d).slice(0, 2).join(" ")})` });
+          setDState({ ...seed(saved.id), folder: d.folder });
+          toast(`Saved as preset “${saved.name}”`, "Rename or change it under Presets.");
+        }}>Save as preset…</button>
+        <button className="primary small" onClick={onClose}>Done</button>
       </div>
     </div>
   );
 }
+
+const formatShort = (x: Preset) => (x.kind === "music" ? (x.audioFormat === "mp3" ? `MP3 ${x.audioQuality}` : x.audioFormat.toUpperCase()) : `${x.quality === "best" ? "Best" : x.quality === "2160" ? "4K" : x.quality + "p"}${x.container !== "any" ? " " + x.container.toUpperCase() : ""}`);
 
 function ImportModal({ onClose, onAdd }: { onClose: () => void; onAdd: (t: string) => void }) {
   const [t, setT] = useState("");
@@ -246,7 +313,9 @@ function ImportModal({ onClose, onAdd }: { onClose: () => void; onAdd: (t: strin
 
 // ------------------------------------------------------------------ queue
 
-const ACTIVE = ["working", "downloading", "review", "queued", "pending"];
+const RUNNING = ["working", "downloading"];
+const WAITING = ["queued", "pending"];
+const ACTIVE = [...RUNNING, ...WAITING, "review"];
 type Filter = "all" | "done" | "failed";
 
 function Queue({ list, onLog }: { list: JobInfo[]; onLog: (id: string) => void }) {
@@ -254,10 +323,15 @@ function Queue({ list, onLog }: { list: JobInfo[]; onLog: (id: string) => void }
   const [filter, setFilter] = useState<Filter>("all");
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [allNext, setAllNext] = useState(false);
+  const review = list.filter((j) => j.status === "review");
+  const running = list.filter((j) => RUNNING.includes(j.status));
+  const waiting = list.filter((j) => WAITING.includes(j.status));
+  const pending = waiting.filter((j) => j.status === "pending");
   const active = list.filter((j) => ACTIVE.includes(j.status));
   const finished = list.filter((j) => !ACTIVE.includes(j.status));
+  const failedCount = finished.filter((j) => j.status === "error").length;
   const shown = finished.filter((j) => filter === "all" || (filter === "done" ? j.status === "done" || j.status === "skipped" : j.status === "error" || j.status === "canceled"));
-  const pending = active.filter((j) => j.status === "pending");
   // Albums and playlists as one row you can open.
   const groups = useMemo(() => {
     if (!st.settings.groupAlbums) return shown.map((j) => ({ key: j.id, jobs: [j] }));
@@ -281,29 +355,47 @@ function Queue({ list, onLog }: { list: JobInfo[]; onLog: (id: string) => void }
     return n;
   });
   const selIds = [...sel].filter((id) => finished.some((j) => j.id === id));
+  const nextShown = allNext ? waiting : waiting.slice(0, 3);
+  const compact = st.settings.compactList;
+  const parts = [running.length && `${running.length} downloading`, waiting.length && `${waiting.length} waiting`, review.length && `${review.length} need${review.length === 1 ? "s" : ""} you`, finished.length && `${finished.length} finished`].filter(Boolean);
+
+  if (!list.length)
+    return (
+      <section className="card queue empty-queue">
+        <div className="empty-big">
+          <span className="dicon">{I.down}</span>
+          <b>Nothing in the queue yet</b>
+          <span className="muted small">Paste a link above, find something in Search, or subscribe to a channel.</span>
+        </div>
+      </section>
+    );
 
   return (
-    <>
-      <section className="card list">
-        <div className="row list-head">
-          <h2>Downloading</h2>
-          <span className="badge">{active.length}</span>
-          <div className="spacer" />
-          {pending.length > 0 && <button className="small-btn" onClick={() => jobs.start(pending.map((j) => j.id))}>{I.play} Start {pending.length}</button>}
-          {active.length > 0 && <button className="small-btn" onClick={async () => (await askConfirm(`Cancel all ${active.length} downloads?`, { okLabel: "Cancel all", danger: true })) && jobs.cancelAll()}>Cancel all</button>}
-          <button className="link" onClick={() => void host().reveal(st.library).catch((e) => toast("Couldn't open it", errorText(e)))}>Open library</button>
-        </div>
-        {!active.length && <p className="muted empty">Nothing downloading. Paste a link above, or find something on the Search tab.</p>}
-        {active.map((j) => <ActiveRow key={j.id} j={j} onLog={onLog} compact={st.settings.compactList} />)}
-      </section>
+    <section className="card queue" aria-label="Queue">
+      <div className="queue-head">
+        <h2>Queue</h2>
+        <span className="muted small">{parts.join(" · ")}</span>
+        <div className="spacer" />
+        {pending.length > 0 && <button className="small-btn" onClick={() => jobs.start(pending.map((j) => j.id))}>{I.play} Start {pending.length}</button>}
+        {active.length > 0 && <button className="small-btn" onClick={async () => (await askConfirm(`Cancel all ${active.length} downloads?`, { okLabel: "Cancel all", danger: true })) && jobs.cancelAll()}>Cancel all</button>}
+      </div>
+
+      {review.length > 0 && <div className="sect warn">Needs you <span className="sect-n">{review.length}</span></div>}
+      {review.map((j) => <ActiveRow key={j.id} j={j} onLog={onLog} compact={compact} />)}
+
+      {running.length > 0 && <div className="sect">Now</div>}
+      {running.map((j) => <ActiveRow key={j.id} j={j} onLog={onLog} compact={compact} />)}
+
+      {waiting.length > 0 && <div className="sect">Up next <span className="sect-n">{waiting.length}</span></div>}
+      {nextShown.map((j) => <ActiveRow key={j.id} j={j} onLog={onLog} compact />)}
+      {waiting.length > 3 && <button className="link small sect-more" onClick={() => setAllNext(!allNext)}>{allNext ? "Show fewer" : `Show all ${waiting.length}`}</button>}
 
       {finished.length > 0 && (
-        <section className="card list">
-          <div className="row list-head">
-            <input type="checkbox" checked={!!shown.length && shown.every((j) => sel.has(j.id))} onChange={() => toggle(shown.map((j) => j.id))} title="Select all" />
-            <h2>Completed</h2>
-            <span className="badge">{finished.length}</span>
-            <Seg value={filter} onChange={setFilter} options={[["all", "All"], ["done", "Done"], ["failed", "Failed"]]} />
+        <>
+          <div className="sect sect-bar">
+            <input type="checkbox" aria-label="Select all finished" checked={!!shown.length && shown.every((j) => sel.has(j.id))} onChange={() => toggle(shown.map((j) => j.id))} />
+            Finished <span className="sect-n">{finished.length}</span>
+            <Seg className="small" value={filter} onChange={setFilter} options={[["all", "All"], ["done", "Done"], ["failed", `Failed${failedCount ? ` ${failedCount}` : ""}`]]} />
             <div className="spacer" />
             {selIds.length > 0 ? (
               <>
@@ -319,62 +411,76 @@ function Queue({ list, onLog }: { list: JobInfo[]; onLog: (id: string) => void }
               </>
             ) : (
               <>
-                <button className="link" onClick={() => jobs.clear("done")}>Clear done</button>
-                <button className="link" onClick={() => jobs.clear("failed")}>Clear failed</button>
+                <button className="link small" onClick={() => jobs.clear("done")}>Clear done</button>
+                {failedCount > 0 && <button className="link small" onClick={() => jobs.clear("failed")}>Clear failed</button>}
               </>
             )}
           </div>
           {groups.map((g) =>
             g.jobs.length === 1 ? (
-              <DoneRow key={g.key} j={g.jobs[0]} selected={sel.has(g.jobs[0].id)} onSelect={() => toggle([g.jobs[0].id])} onLog={onLog} />
+              <DoneRow key={g.key} j={g.jobs[0]} selected={sel.has(g.jobs[0].id)} onSelect={() => toggle([g.jobs[0].id])} onLog={onLog} compact={compact} />
             ) : (
               <div className="group" key={g.key}>
-                <div className="job done-row group-head" onClick={() => setOpen((o) => { const n = new Set(o); n.has(g.key) ? n.delete(g.key) : n.add(g.key); return n; })}>
-                  <input type="checkbox" checked={g.jobs.every((j) => sel.has(j.id))} onClick={(e) => e.stopPropagation()} onChange={() => toggle(g.jobs.map((j) => j.id))} />
-                  <Pic src={g.jobs[0].thumbnail} className={g.key.startsWith("a:") ? "square" : "thumb"} fallback={g.key.startsWith("a:") ? I.disc : I.film} />
-                  <div className="job-main">
+                <div className="qrow done group-head" onClick={() => setOpen((o) => { const n = new Set(o); n.has(g.key) ? n.delete(g.key) : n.add(g.key); return n; })}>
+                  <input type="checkbox" aria-label="Select group" checked={g.jobs.every((j) => sel.has(j.id))} onClick={(e) => e.stopPropagation()} onChange={() => toggle(g.jobs.map((j) => j.id))} />
+                  <Pic src={g.jobs[0].thumbnail} className={`qthumb ${g.key.startsWith("a:") ? "sq" : ""}`} fallback={g.key.startsWith("a:") ? I.disc : I.film} />
+                  <div className="qmain">
                     <div className="job-title">{g.key.slice(2)}</div>
                     <div className="muted small">
-                      {g.jobs.filter((j) => j.status === "done").length} of {g.jobs.length} {g.key.startsWith("a:") ? "tracks" : "videos"}
+                      {g.jobs.filter((j) => j.status === "done").length} of {g.jobs.length} {g.key.startsWith("a:") ? "songs" : "videos"}
                       {g.jobs.some((j) => j.status === "error") && <span className="error-text"> · {g.jobs.filter((j) => j.status === "error").length} failed</span>}
                     </div>
                   </div>
-                  <span className="muted small">{open.has(g.key) ? "▾" : "▸"}</span>
-                  {g.jobs.some((j) => j.status === "error") && <button className="small-btn" onClick={(e) => { e.stopPropagation(); jobs.retry(g.jobs.filter((j) => j.status === "error").map((j) => j.id)); }}>{I.retry} Retry failed</button>}
+                  <div className="qstate muted small">{open.has(g.key) ? "▾ hide" : "▸ show"}</div>
+                  <div className="job-actions">
+                    {g.jobs.some((j) => j.status === "error") && <button className="small-btn" onClick={(e) => { e.stopPropagation(); jobs.retry(g.jobs.filter((j) => j.status === "error").map((j) => j.id)); }}>{I.retry} Retry failed</button>}
+                  </div>
                 </div>
-                {open.has(g.key) && g.jobs.map((j) => <DoneRow key={j.id} j={j} selected={sel.has(j.id)} onSelect={() => toggle([j.id])} onLog={onLog} nested />)}
+                {open.has(g.key) && g.jobs.map((j) => <DoneRow key={j.id} j={j} selected={sel.has(j.id)} onSelect={() => toggle([j.id])} onLog={onLog} nested compact />)}
               </div>
             ),
           )}
           {!shown.length && <p className="muted empty">Nothing here.</p>}
-        </section>
+        </>
       )}
-    </>
+    </section>
   );
 }
 
 function ActiveRow({ j, onLog, compact }: { j: JobInfo; onLog: (id: string) => void; compact: boolean }) {
   const pct = Math.round(j.progress * 100);
+  const waiting = WAITING.includes(j.status);
+  const sub = [j.presetName, j.subName ?? j.playlistTitle, j.qualityLabel && j.formatShort ? `${j.qualityLabel} ${j.formatShort}` : null, j.size].filter(Boolean).join(" · ");
   return (
-    <div className={`job active-row st-${j.status} ${compact ? "compact" : ""}`}>
-      {!compact && <Pic src={j.thumbnail} className={j.kind === "music" ? "square" : "thumb"} fallback={j.kind === "music" ? I.music : I.film} />}
-      <div className="job-main">
+    <div className={`qrow st-${j.status} ${compact ? "compact" : ""}`}>
+      <span />
+      {compact ? <span /> : <Pic src={j.thumbnail} className={`qthumb ${j.kind === "music" ? "sq" : ""}`} fallback={j.kind === "music" ? I.music : I.film} />}
+      <div className="qmain">
         <div className="job-title" title={j.url ?? j.input}>{j.title}</div>
-        {j.status !== "review" && <div className="progress"><span className={j.status} style={{ width: `${j.status === "downloading" ? Math.max(2, pct) : j.status === "working" && j.progress > 0.9 ? 99 : 0}%` }} /></div>}
-        <div className="muted small job-text">
-          <span>{j.stage}</span>
-          {j.status === "downloading" && pct > 0 && <span className="mono"> · {pct}%</span>}
-          {j.speed && <span className="mono"> · {j.speed}</span>}
-          {j.eta && <span className="mono"> · {j.eta === "live" ? "live" : `${j.eta} left`}</span>}
-          {j.size && <span className="mono"> · {j.size}</span>}
-          <span> · {j.presetName}{j.subName ? ` · ${j.subName}` : ""}</span>
-        </div>
+        {!compact && <div className="muted small job-text">{j.status === "review" ? "Pick the right match below, or keep the original title." : sub}</div>}
         {j.status === "review" && <Review j={j} />}
+      </div>
+      <div className="qstate">
+        {j.status === "downloading" && pct > 0 ? (
+          <>
+            <div className="progress"><span style={{ width: `${Math.max(2, pct)}%` }} /></div>
+            <div className="muted small mono">{pct}%{j.speed ? ` · ${j.speed}` : ""}{j.eta ? ` · ${j.eta === "live" ? "live" : `${j.eta} left`}` : ""}</div>
+          </>
+        ) : j.status === "working" || j.status === "downloading" ? (
+          <>
+            <div className="progress"><span className="busy" style={{ width: `${j.progress > 0.9 ? 99 : 8}%` }} /></div>
+            <div className="muted small ell" title={j.stage}>{j.stage}</div>
+          </>
+        ) : j.status === "review" ? (
+          <span className="tag warn">Waiting for you</span>
+        ) : (
+          <span className="muted small">{j.status === "pending" ? "Not started" : "Queued"}</span>
+        )}
       </div>
       <div className="job-actions">
         {j.status === "pending" && <button className="small-btn" onClick={() => jobs.start([j.id])}>{I.play} Start</button>}
-        <button className="icon" title="Log" onClick={() => onLog(j.id)}>{I.log}</button>
-        <button className="icon" title="Cancel" onClick={() => jobs.cancel([j.id])}>{I.x}</button>
+        {!waiting && <button className="icon" aria-label="Log" title="Log" onClick={() => onLog(j.id)}>{I.log}</button>}
+        <button className="icon" aria-label="Cancel" title="Cancel" onClick={() => jobs.cancel([j.id])}>{I.x}</button>
       </div>
     </div>
   );
@@ -407,28 +513,30 @@ function Review({ j }: { j: JobInfo }) {
   );
 }
 
-function DoneRow({ j, selected, onSelect, onLog, nested }: { j: JobInfo; selected: boolean; onSelect: () => void; onLog: (id: string) => void; nested?: boolean }) {
-  const pill = j.status === "done" ? ["ok", "Done"] : j.status === "skipped" ? ["", "Skipped"] : j.status === "canceled" ? ["", "Canceled"] : ["bad", "Failed"];
+function DoneRow({ j, selected, onSelect, onLog, nested, compact }: { j: JobInfo; selected: boolean; onSelect: () => void; onLog: (id: string) => void; nested?: boolean; compact?: boolean }) {
+  const st = useStore();
+  const ok = j.status === "done";
+  const failed = j.status === "error";
+  const where = j.finalPath ? tildify(dirname(j.finalPath), st.info?.home ?? "") : "";
+  const sub = failed ? j.error : [j.matchLabel ?? (j.status === "skipped" ? j.stage : where), [j.qualityLabel, j.formatShort, j.size].filter(Boolean).join(" "), j.chapters?.length ? `${j.chapters.length} files` : null].filter(Boolean).join(" · ");
   return (
-    <div className={`job done-row st-${j.status} ${nested ? "nested" : ""}`}>
-      <input type="checkbox" checked={selected} onChange={onSelect} />
-      <Pic src={j.thumbnail} className={j.kind === "music" ? "square" : "thumb"} fallback={j.kind === "music" ? I.music : I.film} />
-      <div className="job-main">
+    <div className={`qrow done st-${j.status} ${nested ? "nested" : ""} ${compact ? "compact" : ""}`}>
+      <input type="checkbox" aria-label="Select" checked={selected} onChange={onSelect} />
+      {compact ? <span /> : <Pic src={j.thumbnail} className={`qthumb ${j.kind === "music" ? "sq" : ""}`} fallback={j.kind === "music" ? I.music : I.film} />}
+      <div className="qmain">
         <div className="job-title" title={j.finalPath ?? j.url ?? j.input}>{j.title}</div>
-        <div className={`small job-text ${j.status === "error" ? "error-text" : "muted"}`}>
-          <span className={`pill ${pill[0]}`}>{pill[1]}</span>{" "}
-          {j.status === "error" ? j.error : j.stage}
-          {j.matchLabel && j.status === "done" && <span className="muted"> · {j.matchLabel}</span>}
-          {[j.qualityLabel, j.formatShort, j.size].filter(Boolean).length > 0 && <span className="mono"> · {[j.qualityLabel, j.formatShort, j.size].filter(Boolean).join(" · ")}</span>}
-          {j.chapters?.length ? <span> · {j.chapters.length} files</span> : null}
-        </div>
+        {!compact && <div className={`small job-text ${failed ? "error-text" : "muted"}`} title={sub ?? ""}>{sub}</div>}
+      </div>
+      <div className={`qstate small state-line ${ok ? "ok" : failed ? "bad" : "muted"}`}>
+        {ok ? I.check : failed ? I.warn : null}
+        <span>{ok ? "Done" : failed ? "Couldn't download" : j.status === "skipped" ? "Skipped" : "Canceled"}{ok && j.finished ? ` · ${ago(j.finished)}` : ""}</span>
       </div>
       <div className="job-actions">
-        {j.finalPath && <button className="small-btn" onClick={() => void host().reveal(j.finalPath!).catch((e) => toast("Couldn't show it", errorText(e)))}>{I.folder} {fileManager}</button>}
-        {(j.url ?? j.input).startsWith("https://") && <button className="icon" title="Open the link" onClick={() => void host().openUrl(j.url ?? j.input)}>{I.ext}</button>}
-        <button className="icon" title="Log" onClick={() => onLog(j.id)}>{I.log}</button>
-        {(j.status === "error" || j.status === "canceled") && <button className="icon" title="Retry" onClick={() => jobs.retry([j.id])}>{I.retry}</button>}
-        <button className="icon" title="Remove from the list" onClick={() => void jobs.remove([j.id], false)}>{I.x}</button>
+        {j.finalPath && <button className="icon" aria-label={`Show in ${fileManager}`} title={`Show in ${fileManager}`} onClick={() => void host().reveal(j.finalPath!).catch((e) => toast("Couldn't show it", errorText(e)))}>{I.folder}</button>}
+        {(failed || j.status === "canceled") && <button className="icon" aria-label="Retry" title="Retry" onClick={() => jobs.retry([j.id])}>{I.retry}</button>}
+        <button className="icon" aria-label="Log" title="Log" onClick={() => onLog(j.id)}>{I.log}</button>
+        {(j.url ?? j.input).startsWith("https://") && <button className="icon" aria-label="Open the link" title="Open the link" onClick={() => void host().openUrl(j.url ?? j.input)}>{I.ext}</button>}
+        <button className="icon" aria-label="Remove from the list" title="Remove from the list" onClick={() => void jobs.remove([j.id], false)}>{I.x}</button>
       </div>
     </div>
   );

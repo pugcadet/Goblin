@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, errorText, ToolState } from "./api";
 import { askConfirm } from "./confirm";
-import { setHost } from "./engine/host";
+import { host, setHost } from "./engine/host";
 import { jobs } from "./engine/jobs";
 import { store } from "./engine/store";
 import { subs } from "./engine/subs";
 import { tauriHost } from "./engine/tauri";
 import { UpdateToast } from "./Updates";
-import { I, toast, Toasts, useJobs, useStore, useSubs } from "./ui";
+import { I, tildify, toast, Toasts, useJobs, useStore, useSubs } from "./ui";
 import Downloads from "./screens/Downloads";
 import Search from "./screens/Search";
 import Subscriptions from "./screens/Subscriptions";
@@ -18,7 +18,7 @@ import Presets from "./screens/Presets";
 import Settings from "./screens/Settings";
 
 type View = "downloads" | "search" | "subs" | "fix" | "presets" | "settings";
-const TABS: [View, string][] = [["downloads", "Downloads"], ["search", "Search"], ["subs", "Subscriptions"], ["fix", "Fix music"], ["presets", "Presets"], ["settings", "Settings"]];
+const NAV_MAIN: [View, string, keyof typeof I][] = [["downloads", "Download", "down"], ["search", "Search", "search"], ["subs", "Subscriptions", "bell"]];
 const UPDATE_KEY = "goblin-ytdlp-checked";
 const UPDATE_EVERY = 3 * 24 * 3600 * 1000;
 
@@ -136,24 +136,38 @@ export default function App() {
   if (fatal) return <div className="center"><p className="error">{fatal}</p></div>;
   if (!ready) return <div className="center"><p className="muted">Starting…</p></div>;
   const overall = jobs.overall();
+  const item = (id: View, label: string, icon: keyof typeof I, extra?: React.ReactNode) => (
+    <button key={id} className={`nav-item ${view === id ? "on" : ""}`} aria-current={view === id ? "page" : undefined} onClick={() => setView(id)}>
+      <span className="nav-icon">{I[icon]}</span>{label}{extra}
+    </button>
+  );
   return (
     <div className="app">
-      <header>
+      <nav className="sidebar" aria-label="Main">
         <div className="brand"><span className="logo">{I.down}</span>Goblin</div>
-        <nav className="nav">
-          {TABS.map(([id, label]) => (
-            <button key={id} className={view === id ? "on" : ""} onClick={() => setView(id)}>
-              {label}
-              {id === "downloads" && active > 0 && <span className="count">{active}</span>}
-              {id === "downloads" && review > 0 && <span className="count warn" title="Waiting for you">{review}</span>}
-              {id === "subs" && subList.length > 0 && <span className="count grey">{subList.length}</span>}
-            </button>
-          ))}
-        </nav>
+        {NAV_MAIN.map(([id, label, icon]) => item(id, label, icon, <>
+          {id === "downloads" && review > 0 && <span className="count warn" title="Waiting for you">{review}</span>}
+          {id === "downloads" && active > 0 && <span className="count">{active}</span>}
+          {id === "subs" && subList.length > 0 && <span className="count grey">{subList.length}</span>}
+        </>))}
+        <div className="nav-group">Library</div>
+        {item("fix", "Fix music", "wand")}
+        <button className="nav-item" onClick={() => void host().reveal(st.library).catch((e) => toast("Couldn't open it", errorText(e)))}><span className="nav-icon">{I.folder}</span>Open library</button>
         <div className="spacer" />
-        {overall != null && <span className="muted small mono">{Math.round(overall * 100)}%</span>}
-        {tool?.version && <span className="muted small mono" title="yt-dlp version">yt-dlp {tool.version}</span>}
-      </header>
+        {item("presets", "Presets", "sliders")}
+        {item("settings", "Settings", "gear")}
+        <div className="status-box">
+          <button className="status-line" onClick={() => setView("settings")} title="Settings → YouTube account">
+            <span className={`dot ${st.info?.cookiesFile ? "on" : ""}`} />{st.info?.cookiesFile ? "YouTube: signed in" : "YouTube: not signed in"}
+          </button>
+          <button className="status-line" onClick={() => setView("settings")} title={tool?.version ? `yt-dlp ${tool.version}` : undefined}>
+            <span className={`dot ${tool?.version && !updating ? "on" : updating ? "busy" : "bad"}`} />{updating ? "Updating yt-dlp…" : tool?.version ? `yt-dlp ${tool.version}` : "yt-dlp missing"}
+          </button>
+          {overall != null && <div className="status-progress" title="All downloads"><div className="progress"><span style={{ width: `${Math.round(overall * 100)}%` }} /></div></div>}
+          <div className="mono small muted ell" title={st.library}>{tildify(st.library, st.info?.home ?? "")}</div>
+        </div>
+      </nav>
+      <div className="content">
       {notice && (
         <div className={`notice ${notice.bad ? "bad" : ""}`}>
           <span>{notice.text}</span>
@@ -161,13 +175,14 @@ export default function App() {
         </div>
       )}
       {tool && !tool.ffmpeg && <div className="notice bad"><span>ffmpeg is missing, so video and sound can't be joined. Reinstall Goblin to get it back.</span></div>}
-      {st.info && !st.info.library && <div className="notice"><span>Choose where Goblin saves everything.</span><button className="link" onClick={() => setView("settings")}>Settings → Library</button></div>}
+      {st.info && !st.info.library && <div className="notice"><span>Choose where Goblin saves everything.</span><button className="link" onClick={() => setView("settings")}>Settings → Folders</button></div>}
       {view === "downloads" && <Downloads />}
       {view === "search" && <Search />}
       {view === "subs" && <Subscriptions />}
       {view === "fix" && <FixMusic />}
       {view === "presets" && <Presets />}
       {view === "settings" && <Settings tool={tool} onRefresh={() => void refresh()} onUpdateYtDlp={() => void install(false)} updating={updating} />}
+      </div>
       <UpdateToast />
       <Toasts />
     </div>
